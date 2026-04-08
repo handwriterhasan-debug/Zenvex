@@ -1,0 +1,10 @@
+const fs = require('fs');
+const path = './src/pages/LandingPage.tsx';
+let content = fs.readFileSync(path, 'utf8');
+content = content.replace(/red-500/g, 'lime-500');
+content = content.replace(/red-600/g, 'lime-600');
+content = content.replace(/red-900/g, 'lime-900');
+content = content.replace(/red-400/g, 'lime-400');
+content = content.replace(/from-red-500/g, 'from-lime-500');
+content = content.replace(/to-rose-600/g, 'to-lime-600');
+fs.writeFileSync(path, content);
