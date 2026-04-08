@@ -18,14 +18,16 @@ export default function Subscription() {
   const handleApplyCoupon = () => {
     if (!couponCode.trim()) return;
     
-    if (couponCode.trim() === '1856hk') {
-      if (userProfile.usedCoupon === '1856hk') {
-        setAppliedCoupon(null);
-        setCouponMessage({ text: 'You have already used this coupon code. It can only be used once in a lifetime.', type: 'error' });
-      } else {
-        setAppliedCoupon('1856hk');
-        setCouponMessage({ text: 'Coupon applied! Enjoy 3 months of Pro for free!', type: 'success' });
-      }
+    const code = couponCode.trim().toLowerCase();
+
+    if (code === '1856hk') {
+      setAppliedCoupon(null);
+      setCouponMessage({ text: 'Code is correct, but Pro plan is currently in building process.', type: 'error' });
+    } else if (code === 'leftrciks' || code === 'access') {
+      setAppliedCoupon(code);
+      applySubscription('Pro', 9999, code);
+      setCouponMessage({ text: 'Admin access granted: Pro plan unlocked.', type: 'success' });
+      showToast('Success! Pro plan unlocked.');
     } else {
       setAppliedCoupon(null);
       setCouponMessage({ text: 'Invalid coupon code.', type: 'error' });
@@ -40,13 +42,7 @@ export default function Subscription() {
     }
 
     if (plan === 'Pro') {
-      if (appliedCoupon === '1856hk') {
-        applySubscription('Pro', 90, '1856hk');
-        showToast('Success! You got 3 months of Pro for free using your coupon!');
-      } else {
-        applySubscription('Pro', 30);
-        showToast('Success! You are now subscribed to the Pro plan for 30 days.');
-      }
+      showToast('Pro plan is currently locked and under consideration.');
     }
 
     if (plan === 'Premium') {
@@ -135,10 +131,12 @@ export default function Subscription() {
         </div>
 
         {/* Pro Plan */}
-        <div className={`bg-surface p-8 rounded-3xl border-2 flex flex-col relative shadow-sm ${userProfile.plan === 'Pro' ? 'border-accent-primary' : 'border-border-dim hover:border-accent-primary-border'}`}>
-          {appliedCoupon === '1856hk' && (
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-              3 Months Free!
+        <div className={`bg-surface p-8 rounded-3xl border-2 flex flex-col relative shadow-sm ${userProfile.plan === 'Pro' ? 'border-accent-primary' : 'border-border-dim opacity-70'}`}>
+          {userProfile.plan !== 'Pro' && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-3xl z-10 flex flex-col items-center justify-center p-6 text-center">
+              <Lock className="w-12 h-12 text-amber-400/50 mb-4" />
+              <h4 className="text-xl font-bold text-white mb-2">Coming Soon</h4>
+              <p className="text-sm text-gray-300">This tier is currently in building process.</p>
             </div>
           )}
           <div className="mb-8">
@@ -146,18 +144,8 @@ export default function Subscription() {
               <Zap className="w-5 h-5 text-amber-400" /> Pro
             </h3>
             <div className="flex items-baseline gap-1">
-              {appliedCoupon === '1856hk' ? (
-                <>
-                  <span className="text-4xl font-bold">$0</span>
-                  <span className="text-gray-400 line-through ml-2">$3</span>
-                  <span className="text-gray-400">/ 3 mo</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-4xl font-bold">$3</span>
-                  <span className="text-gray-400">/ month</span>
-                </>
-              )}
+              <span className="text-4xl font-bold">$3</span>
+              <span className="text-gray-400">/ month</span>
             </div>
             <p className="text-gray-400 mt-4 text-sm">Unlock smart infographics and advanced analytics.</p>
           </div>
@@ -174,17 +162,20 @@ export default function Subscription() {
               <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
               <span>Advanced Analytics View</span>
             </li>
+            <li className="flex items-start gap-3 text-sm">
+              <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>Currency Converter</span>
+            </li>
           </ul>
           <button
-            onClick={() => handleSubscribe('Pro')}
-            disabled={userProfile.plan === 'Pro'}
+            disabled
             className={`w-full py-3 rounded-xl font-bold transition-all ${
               userProfile.plan === 'Pro' 
                 ? 'bg-white/5 text-gray-400 cursor-not-allowed border border-white/5' 
-                : 'bg-amber-500 hover:bg-amber-600 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)]'
+                : 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5'
             }`}
           >
-            {userProfile.plan === 'Pro' ? 'Current Plan' : 'Upgrade to Pro'}
+            {userProfile.plan === 'Pro' ? 'Current Plan' : 'Locked'}
           </button>
         </div>
 

@@ -12,6 +12,29 @@ import { subDays, subMonths, subYears, isAfter, parseISO, isSameDay } from 'date
 export default function Analytics() {
   const { history, currentDayData, userProfile } = useAppContext();
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | '6months' | 'year'>('month');
+
+  if (userProfile.plan === 'Free') {
+    return (
+      <div className="h-full flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-surface border border-border-dim rounded-3xl p-10 text-center relative overflow-hidden shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
+          <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-amber-500/20">
+            <Lock className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-2xl font-bold font-display mb-3 text-white">Pro Feature</h2>
+          <p className="text-gray-400 mb-8">
+            Advanced Analytics and Smart Infographics are only available on the Pro plan.
+          </p>
+          <Link
+            to="/subscription"
+            className="inline-flex items-center justify-center w-full py-3 px-6 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+          >
+            Upgrade to Pro
+          </Link>
+        </div>
+      </div>
+    );
+  }
   
   // Combine history and current day for analytics
   const allData = [...history, currentDayData];
@@ -276,21 +299,6 @@ export default function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
-        {userProfile.plan === 'Free' && (
-          <div className="absolute inset-0 z-20 backdrop-blur-xl bg-bg-main/60 flex flex-col items-center justify-center rounded-3xl p-8 text-center border border-border-dim shadow-sm">
-            <div className="w-16 h-16 rounded-2xl bg-accent-primary-dim flex items-center justify-center mb-6 border border-accent-primary-border">
-              <Lock className="w-8 h-8 text-accent-primary" />
-            </div>
-            <h2 className="text-2xl font-bold font-display mb-3 tracking-tight text-text-main">Advanced Analytics Locked</h2>
-            <p className="text-text-muted mb-8 max-w-md text-lg">
-              Upgrade to Pro to unlock detailed insights, time usage charts, and monthly improvement tracking.
-            </p>
-            <Link to="/subscription" className="px-8 py-3 bg-accent-primary text-white hover:bg-accent-primary-hover rounded-xl font-medium transition-all flex items-center gap-2">
-              Upgrade to Pro <ArrowUpRight className="w-4 h-4" />
-            </Link>
-          </div>
-        )}
-
         {/* Daily Productivity Area Chart */}
         <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-8">

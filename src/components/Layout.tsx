@@ -23,7 +23,8 @@ import {
   MessageSquareWarning,
   LogOut,
   Sparkles,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Lock
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -231,34 +232,40 @@ export default function Layout() {
         </div>
         
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto mt-2 custom-scrollbar">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.path}
-              className={({ isActive }) => cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                isActive 
-                  ? "bg-white/10 text-white border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.2)]" 
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              {({ isActive }) => (
-                <>
-                  <item.icon className={cn("w-4 h-4", isActive ? "text-[#ff2a2a]" : "")} />
-                  {item.name}
-                  {isActive && (
-                    <motion.div 
-                      layoutId="sidebar-active"
-                      className="absolute left-0 w-1 h-8 bg-[#ff2a2a] rounded-r-full shadow-[0_0_10px_rgba(255,42,42,0.8)]"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.2 }}
-                    />
-                  )}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const isLocked = userProfile?.plan === 'Free' && (item.name === 'Analytics' || item.name === 'Currency');
+            return (
+              <NavLink
+                key={item.name}
+                to={item.path}
+                className={({ isActive }) => cn(
+                  "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative",
+                  isActive 
+                    ? "bg-white/10 text-white border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.2)]" 
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                {({ isActive }) => (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <item.icon className={cn("w-4 h-4", isActive ? "text-[#ff2a2a]" : "")} />
+                      {item.name}
+                    </div>
+                    {isLocked && <Lock className="w-3.5 h-3.5 text-amber-500/70" />}
+                    {isActive && (
+                      <motion.div 
+                        layoutId="sidebar-active"
+                        className="absolute left-0 w-1 h-8 bg-[#ff2a2a] rounded-r-full shadow-[0_0_10px_rgba(255,42,42,0.8)]"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2 }}
+                      />
+                    )}
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
           
           {isAdmin && (
             <NavLink
@@ -362,26 +369,32 @@ export default function Layout() {
               </div>
               
               <nav className="flex-1 px-4 space-y-1 overflow-y-auto mt-2 custom-scrollbar">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.name}
-                    to={item.path}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={({ isActive }) => cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                      isActive 
-                        ? "bg-white/10 text-white border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.2)]" 
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                    )}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <item.icon className={cn("w-4 h-4", isActive ? "text-[#ff2a2a]" : "")} />
-                        {item.name}
-                      </>
-                    )}
-                  </NavLink>
-                ))}
+                {navItems.map((item) => {
+                  const isLocked = userProfile?.plan === 'Free' && (item.name === 'Analytics' || item.name === 'Currency');
+                  return (
+                    <NavLink
+                      key={item.name}
+                      to={item.path}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={({ isActive }) => cn(
+                        "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                        isActive 
+                          ? "bg-white/10 text-white border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.2)]" 
+                          : "text-gray-400 hover:text-white hover:bg-white/5"
+                      )}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <div className="flex items-center gap-3">
+                            <item.icon className={cn("w-4 h-4", isActive ? "text-[#ff2a2a]" : "")} />
+                            {item.name}
+                          </div>
+                          {isLocked && <Lock className="w-3.5 h-3.5 text-amber-500/70" />}
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
 
                 <button
                   onClick={() => {

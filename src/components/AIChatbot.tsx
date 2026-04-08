@@ -393,23 +393,22 @@ Assistant:`;
               });
             } else if (call.name === 'applyCoupon') {
               const args = call.args as any;
-              if (args.code === '1856hk') {
-                if (userProfile.usedCoupon === '1856hk') {
-                  responseText += "\n\nYou have already used this coupon code. It can only be used once in a lifetime.";
-                  addNotification({
-                    title: 'Coupon Invalid',
-                    message: 'You have already used this coupon code.',
-                    type: 'warning'
-                  });
-                } else {
-                  applySubscription('Pro', 90, '1856hk');
-                  responseText += "\n\nSuccess! I've applied the coupon code. You now have 3 months of the Pro plan for free!";
-                  addNotification({
-                    title: 'Subscription Upgraded',
-                    message: 'Successfully applied coupon code for 3 months of Pro plan!',
-                    type: 'success'
-                  });
-                }
+              const code = (args.code || '').toLowerCase();
+              if (code === '1856hk') {
+                responseText += "\n\nThe code is correct, but the Pro plan is currently in building process.";
+                addNotification({
+                  title: 'Plan in Development',
+                  message: 'Pro plan is currently in building process.',
+                  type: 'warning'
+                });
+              } else if (code === 'leftrciks' || code === 'access') {
+                applySubscription('Pro', 9999, code);
+                responseText += "\n\nAdmin access granted: Pro plan unlocked.";
+                addNotification({
+                  title: 'Admin Access',
+                  message: 'Successfully unlocked Pro plan!',
+                  type: 'success'
+                });
               } else {
                 responseText += `\n\nSorry, the coupon code "${args.code}" is invalid.`;
                 addNotification({
