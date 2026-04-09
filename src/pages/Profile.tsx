@@ -23,7 +23,6 @@ export default function Profile() {
     localStorage.removeItem('isAdmin');
     localStorage.removeItem('makeYourFutureState');
     localStorage.removeItem('isGuestMode');
-    localStorage.removeItem('guestModeStartedAt');
     resetState();
     navigate('/');
   };

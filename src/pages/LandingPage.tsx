@@ -26,16 +26,10 @@ export default function LandingPage() {
 
   useEffect(() => {
     const guestMode = localStorage.getItem('isGuestMode');
-    const guestStartedAt = localStorage.getItem('guestModeStartedAt');
     
-    if (guestMode === 'true' && guestStartedAt) {
-      const startedAt = parseInt(guestStartedAt, 10);
-      const daysPassed = (Date.now() - startedAt) / (1000 * 60 * 60 * 24);
-      
-      if (daysPassed <= 14) {
-        navigate('/dashboard');
-        return;
-      }
+    if (guestMode === 'true') {
+      navigate('/dashboard');
+      return;
     }
   }, [navigate]);
 
@@ -58,9 +52,6 @@ export default function LandingPage() {
   const handleDemoClick = (e: MouseEvent) => {
     e.preventDefault();
     enableDemoMode();
-    if (!localStorage.getItem('guestModeStartedAt')) {
-      localStorage.setItem('guestModeStartedAt', Date.now().toString());
-    }
     localStorage.setItem('isGuestMode', 'true');
     navigate('/dashboard');
   };

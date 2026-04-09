@@ -25,19 +25,9 @@ export default function ProtectedRoute() {
 
         // Fallback to guest mode check
         const guestMode = localStorage.getItem('isGuestMode');
-        const guestStartedAt = localStorage.getItem('guestModeStartedAt');
 
-        if (guestMode === 'true' && guestStartedAt) {
-          const startedAt = parseInt(guestStartedAt, 10);
-          const daysPassed = (Date.now() - startedAt) / (1000 * 60 * 60 * 24);
-          
-          if (daysPassed > 14) {
-            localStorage.removeItem('isGuestMode');
-            localStorage.removeItem('guestModeStartedAt');
-            setIsAuthenticated(false);
-          } else {
-            setIsAuthenticated(true);
-          }
+        if (guestMode === 'true') {
+          setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
         }
@@ -47,19 +37,9 @@ export default function ProtectedRoute() {
         // Fallback to guest mode check even if Supabase fails/times out
         try {
           const guestMode = localStorage.getItem('isGuestMode');
-          const guestStartedAt = localStorage.getItem('guestModeStartedAt');
 
-          if (guestMode === 'true' && guestStartedAt) {
-            const startedAt = parseInt(guestStartedAt, 10);
-            const daysPassed = (Date.now() - startedAt) / (1000 * 60 * 60 * 24);
-            
-            if (daysPassed > 14) {
-              localStorage.removeItem('isGuestMode');
-              localStorage.removeItem('guestModeStartedAt');
-              setIsAuthenticated(false);
-            } else {
-              setIsAuthenticated(true);
-            }
+          if (guestMode === 'true') {
+            setIsAuthenticated(true);
           } else {
             setIsAuthenticated(false);
           }

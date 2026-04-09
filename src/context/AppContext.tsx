@@ -419,7 +419,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const resetState = () => {
     localStorage.removeItem('isGuestMode');
-    localStorage.removeItem('guestModeStartedAt');
     localStorage.removeItem('makeYourFutureState');
     setState(prev => ({ ...defaultState, exchangeRatesCache: prev.exchangeRatesCache }));
   };
