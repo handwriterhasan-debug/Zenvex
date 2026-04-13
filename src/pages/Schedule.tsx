@@ -251,7 +251,13 @@ export default function Schedule() {
               <PieChartIcon className="w-5 h-5 text-blue-500" />
               Time Distribution
             </h2>
-            <div className="h-[250px] w-full">
+            <div className="h-[250px] w-full relative flex items-center justify-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                <span className="text-2xl font-bold font-display text-white">
+                  {scheduleChartData.reduce((a, b) => a + b.value, 0).toFixed(1).replace(/\.0$/, '')}h
+                </span>
+                <span className="text-xs text-gray-400 uppercase tracking-widest mt-1">Total</span>
+              </div>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie

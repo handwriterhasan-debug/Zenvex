@@ -212,7 +212,7 @@ export default function Dashboard() {
       className="space-y-8"
     >
       {/* Focus Timer Dashboard */}
-      {showTimer && (
+      {(showTimer || isTimerRunning || (timeLeft > 0 && timeLeft !== 25 * 60)) && (
         <motion.div 
           initial={{ opacity: 0, scale: 0.9, y: -20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -336,7 +336,7 @@ export default function Dashboard() {
                 <div className="w-full bg-surface rounded-full h-1.5 md:h-2 mt-1 overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: `${totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0}%` }}
+                    animate={{ width: `${completedHabits <= 0 ? 0 : Math.max(2, Math.min(100, totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0))}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className="h-full bg-emerald-500 rounded-full"
                   />
@@ -355,7 +355,7 @@ export default function Dashboard() {
                 <div className="w-full bg-surface rounded-full h-1.5 md:h-2 mt-1 overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: `${totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0}%` }}
+                    animate={{ width: `${completedTasks <= 0 ? 0 : Math.max(2, Math.min(100, totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0))}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className="h-full bg-blue-500 rounded-full"
                   />
@@ -636,7 +636,7 @@ export default function Dashboard() {
                     <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden shadow-inner border border-white/5">
                       <motion.div 
                         initial={{ width: 0 }}
-                        animate={{ width: `${(habit.streak / habit.target) * 100}%` }}
+                        animate={{ width: `${habit.streak <= 0 ? 0 : Math.max(2, Math.min(100, (habit.streak / habit.target) * 100))}%` }}
                         transition={{ duration: 1, delay: i * 0.1 }}
                         className={`h-full rounded-full ${habit.color.replace('bg-', 'bg-').replace('500', '400')} shadow-[0_0_10px_rgba(255,255,255,0.1)]`}
                       ></motion.div>

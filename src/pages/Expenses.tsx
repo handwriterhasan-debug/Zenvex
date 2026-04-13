@@ -351,7 +351,7 @@ export default function Expenses() {
             <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden">
               <div 
                 className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
-                style={{ width: `${Math.min(100, Math.max(0, (currentWallet / Math.max(1, monthlyIncome)) * 100))}%` }}
+                style={{ width: `${currentWallet <= 0 ? 0 : Math.max(2, Math.min(100, (currentWallet / Math.max(1, monthlyIncome)) * 100))}%` }}
               ></div>
             </div>
           </div>
@@ -406,7 +406,10 @@ export default function Expenses() {
               <span className="text-blue-500">+{savingsIncomes > 0 ? (baseSavings > 0 ? Math.round((savingsIncomes / baseSavings) * 100) : 100) : 0}%</span>
             </div>
             <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full w-[75%]"></div>
+              <div 
+                className="h-full bg-blue-500 rounded-full transition-all duration-1000"
+                style={{ width: `${savingsIncomes <= 0 ? 0 : Math.max(2, Math.min(100, savingsIncomes > 0 ? (baseSavings > 0 ? Math.round((savingsIncomes / baseSavings) * 100) : 100) : 0))}%` }}
+              ></div>
             </div>
           </div>
         </div>
@@ -482,7 +485,7 @@ export default function Expenses() {
             <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden">
               <div 
                 className="h-full bg-accent-primary rounded-full transition-all duration-1000"
-                style={{ width: `${Math.min(100, (totalExpense / Math.max(1, monthlyIncome + walletIncomes)) * 100)}%` }}
+                style={{ width: `${totalExpense <= 0 ? 0 : Math.max(2, Math.min(100, (totalExpense / Math.max(1, monthlyIncome + walletIncomes)) * 100))}%` }}
               ></div>
             </div>
           </div>

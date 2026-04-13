@@ -543,26 +543,43 @@ Assistant:`;
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-[#222] bg-[#0a0a0a]">
+            <div className="p-4 border-t border-[#222] bg-[#0a0a0a] safe-pb">
               <form 
                 onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-                className="flex items-center gap-2"
+                className="flex items-end gap-2"
               >
-                <input
-                  type="text"
+                <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask for advice..."
-                  className="flex-1 bg-[#111] border border-[#333] rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-[#ff2a2a] transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim() && !isLoading) {
+                        handleSend();
+                      }
+                    }
+                  }}
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+                  }}
+                  placeholder="Ask for advice... (Shift + Enter for new line)"
+                  maxLength={1000}
+                  rows={1}
+                  className="flex-1 bg-[#111] border border-[#333] rounded-2xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff2a2a] transition-colors resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
                 />
                 <button 
                   type="submit"
                   disabled={!input.trim() || isLoading}
-                  className="w-10 h-10 rounded-full bg-[#ff2a2a] hover:bg-[#ff4d4d] disabled:opacity-50 disabled:hover:bg-[#ff2a2a] text-white flex items-center justify-center transition-colors shrink-0"
+                  className="w-10 h-10 rounded-full bg-[#ff2a2a] hover:bg-[#ff4d4d] disabled:opacity-50 disabled:hover:bg-[#ff2a2a] text-white flex items-center justify-center transition-colors shrink-0 mb-0.5"
                 >
                   <Send className="w-4 h-4 ml-0.5" />
                 </button>
               </form>
+              <div className="text-right mt-1">
+                <span className="text-[10px] text-gray-500">{input.length}/1000</span>
+              </div>
             </div>
           </motion.div>
         )}

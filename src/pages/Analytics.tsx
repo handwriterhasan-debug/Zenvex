@@ -342,7 +342,13 @@ export default function Analytics() {
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-center justify-center gap-8 h-auto md:h-64">
-            <div className="w-48 h-48">
+            <div className="w-48 h-48 relative flex items-center justify-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                <span className="text-2xl font-bold font-display text-white">
+                  {timeUsageData.reduce((a, b) => a + b.value, 0).toFixed(0)}%
+                </span>
+                <span className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Total</span>
+              </div>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
