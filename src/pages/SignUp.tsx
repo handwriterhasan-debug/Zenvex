@@ -3,6 +3,8 @@ import { useNavigate, Link } from 'react-router';
 import { supabase } from '../supabaseClient';
 import { Mail, Lock, UserPlus, ArrowRight, User } from 'lucide-react';
 
+import { handleGuestSession } from '../utils/guestAuth';
+
 export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,32 +18,51 @@ export default function SignUp() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          // Redirect to signin page with a verified flag after they click the email link
-          emailRedirectTo: `${window.location.origin}/signin?verified=true`
-        }
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      const isGuest = session?.user?.email?.startsWith('guest_');
 
-      if (error) throw error;
-      
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-        throw new Error('An account with this email already exists.');
-      }
-      
-      if (data.session) {
-        // Email confirmation is disabled, they are already logged in
+      if (isGuest) {
+        // Upgrade guest account to real account
+        const { data, error } = await supabase.auth.updateUser({
+          email,
+          password
+        });
+        
+        if (error) throw error;
+        
+        // Remove guest credentials
+        localStorage.removeItem('zenvex_guest_creds');
+        localStorage.removeItem('isGuestMode');
+        
         navigate('/dashboard');
       } else {
-        // Email confirmation is enabled
-        navigate('/signin', { 
-          state: { 
-            email, 
-            message: "Your account has been created. Please check your email and verify your address before logging in." 
-          } 
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            // Redirect to signin page with a verified flag after they click the email link
+            emailRedirectTo: `${window.location.origin}/signin?verified=true`
+          }
         });
+
+        if (error) throw error;
+        
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          throw new Error('An account with this email already exists.');
+        }
+        
+        if (data.session) {
+          // Email confirmation is disabled, they are already logged in
+          navigate('/dashboard');
+        } else {
+          // Email confirmation is enabled
+          navigate('/signin', { 
+            state: { 
+              email, 
+              message: "Your account has been created. Please check your email and verify your address before logging in." 
+            } 
+          });
+        }
       }
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('rate limit')) {
@@ -56,20 +77,37 @@ export default function SignUp() {
 
   const handleGoogleLogin = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`
-        }
-      });
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      const isGuest = session?.user?.email?.startsWith('guest_');
+      
+      if (isGuest) {
+        const { error } = await supabase.auth.linkIdentity({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/dashboard`
+          }
+        });
+        if (error) throw error;
+        localStorage.removeItem('zenvex_guest_creds');
+        localStorage.removeItem('isGuestMode');
+      } else {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/dashboard`
+          }
+        });
+        if (error) throw error;
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to sign up with Google');
     }
   };
 
-  const handleGuestLogin = () => {
-    localStorage.setItem('isGuestMode', 'true');
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    await handleGuestSession();
+    setLoading(false);
     navigate('/dashboard');
   };
 

@@ -56,10 +56,11 @@ export default function Layout() {
   const [time, setTime] = useState(new Date());
   
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    try { await supabase.auth.signOut(); } catch (e) {}
     localStorage.removeItem('isAdmin');
     localStorage.removeItem('makeYourFutureState');
     localStorage.removeItem('isGuestMode');
+    localStorage.removeItem('zenvex_guest_creds');
     resetState();
     navigate('/');
   };
@@ -214,20 +215,19 @@ export default function Layout() {
             </div>
             
             <div className="flex flex-col gap-2 w-full">
-              <button
-                onClick={() => {
-                  if (localStorage.getItem('isGuestMode') === 'true') {
+              {localStorage.getItem('isGuestMode') === 'true' && (
+                <button
+                  onClick={async () => {
+                    try { await supabase.auth.signOut(); } catch (e) {}
                     localStorage.removeItem('isGuestMode');
-                    // We don't have disableDemoMode in Layout context directly, but resetState does similar things
-                    resetState();
-                  }
-                  navigate('/');
-                }}
-                className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/5 text-xs uppercase tracking-wider"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                Exit App
-              </button>
+                    navigate('/');
+                  }}
+                  className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/5 text-xs uppercase tracking-wider"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Exit App
+                </button>
+              )}
               <button
                 onClick={handleSignOut}
                 className="flex items-center justify-center gap-2 w-full py-2 bg-accent-primary-dim hover:bg-accent-primary-border text-accent-primary rounded-xl font-medium transition-colors border border-accent-primary-dim text-xs uppercase tracking-wider"
@@ -387,19 +387,19 @@ export default function Layout() {
                   </div>
                   
                   <div className="flex flex-col gap-2 w-full">
-                    <button
-                      onClick={() => {
-                        if (localStorage.getItem('isGuestMode') === 'true') {
+                    {localStorage.getItem('isGuestMode') === 'true' && (
+                      <button
+                        onClick={async () => {
+                          try { await supabase.auth.signOut(); } catch (e) {}
                           localStorage.removeItem('isGuestMode');
-                          resetState();
-                        }
-                        navigate('/');
-                      }}
-                      className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/5 text-xs uppercase tracking-wider"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      Exit App
-                    </button>
+                          navigate('/');
+                        }}
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/5 text-xs uppercase tracking-wider"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Exit App
+                      </button>
+                    )}
                     <button
                       onClick={handleSignOut}
                       className="flex items-center justify-center gap-2 w-full py-2 bg-accent-primary-dim hover:bg-accent-primary-border text-accent-primary rounded-xl font-medium transition-colors border border-accent-primary-dim text-xs uppercase tracking-wider"

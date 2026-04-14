@@ -1,9 +1,10 @@
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowRight, CheckCircle2, Zap, TrendingUp, Calendar, Wallet, Target, Activity, Clock, Shield, Sparkles, Send } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Zap, TrendingUp, Calendar, Wallet, Target, Activity, Clock, Shield, Sparkles, Send, User } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useEffect, useState, type MouseEvent } from 'react';
 import { supabase } from '../supabaseClient';
+import { handleGuestSession } from '../utils/guestAuth';
 
 export default function LandingPage() {
   const { enableDemoMode, disableDemoMode } = useAppContext();
@@ -56,14 +57,33 @@ export default function LandingPage() {
     navigate('/dashboard');
   };
 
-  const handleStartBuilding = (e: MouseEvent) => {
+  const handleStartBuilding = async (e: MouseEvent) => {
     e.preventDefault();
-    if (session) {
+    if (session && !isGuest) {
       navigate('/dashboard');
     } else {
+      if (localStorage.getItem('zenvex_guest_creds')) {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession) {
+          await handleGuestSession();
+        }
+      }
       navigate('/signup');
     }
   };
+
+  const handlePlayAsGuest = async (e: MouseEvent) => {
+    e.preventDefault();
+    if (session) {
+      localStorage.setItem('isGuestMode', 'true');
+      navigate('/dashboard');
+    } else {
+      await handleGuestSession();
+      navigate('/dashboard');
+    }
+  };
+
+  const isGuest = session?.user?.email?.startsWith('guest_');
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-lime-500/30 overflow-x-hidden font-sans">
@@ -87,17 +107,25 @@ export default function LandingPage() {
             Zenvex
           </div>
           <div className="flex items-center gap-4">
-            {session ? (
+            {session && !isGuest ? (
               <button onClick={() => navigate('/dashboard')} className="text-white hover:text-gray-300 px-4 py-2 text-sm font-semibold transition-colors">
                 Dashboard
               </button>
             ) : (
-              <button onClick={() => navigate('/signin')} className="text-white hover:text-gray-300 px-4 py-2 text-sm font-semibold transition-colors">
+              <button onClick={async () => {
+                if (localStorage.getItem('zenvex_guest_creds')) {
+                  const { data: { session: currentSession } } = await supabase.auth.getSession();
+                  if (!currentSession) {
+                    await handleGuestSession();
+                  }
+                }
+                navigate('/signin');
+              }} className="text-white hover:text-gray-300 px-4 py-2 text-sm font-semibold transition-colors">
                 Sign In
               </button>
             )}
             <button onClick={handleStartBuilding} className="bg-white text-black hover:opacity-80 px-5 py-2 rounded-full text-sm font-semibold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-              {session ? 'See my app' : 'Get Started'}
+              {session && !isGuest ? 'See my app' : 'Get Started'}
             </button>
           </div>
         </div>
@@ -141,11 +169,26 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <button onClick={handleStartBuilding} className="group relative w-full sm:w-auto bg-white text-black px-8 py-4 rounded-full text-lg font-semibold transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.15)] overflow-hidden">
-              <span className="relative flex items-center justify-center gap-2">
-                {session ? 'See my app' : 'Start Building Free'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </span>
-            </button>
+            {session && !isGuest ? (
+              <button onClick={handleStartBuilding} className="group relative w-full sm:w-auto bg-white text-black px-8 py-4 rounded-full text-lg font-semibold transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.15)] overflow-hidden">
+                <span className="relative flex items-center justify-center gap-2">
+                  See my app <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </span>
+              </button>
+            ) : (
+              <>
+                <button onClick={handleStartBuilding} className="group relative w-full sm:w-auto bg-white text-black px-8 py-4 rounded-full text-lg font-semibold transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.15)] overflow-hidden">
+                  <span className="relative flex items-center justify-center gap-2">
+                    Start Building Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                </button>
+                <button onClick={handlePlayAsGuest} className="group relative w-full sm:w-auto bg-white/10 text-white border border-white/20 px-8 py-4 rounded-full text-lg font-semibold transition-all hover:bg-white/20 hover:scale-105">
+                  <span className="relative flex items-center justify-center gap-2">
+                    <User className="w-5 h-5" /> Play as Guest
+                  </span>
+                </button>
+              </>
+            )}
           </motion.div>
         </div>
       </section>

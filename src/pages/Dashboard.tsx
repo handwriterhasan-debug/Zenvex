@@ -655,20 +655,18 @@ export default function Dashboard() {
             </div>
             
             {userProfile.plan === 'Free' ? (
-              <div className="absolute inset-0 z-10 backdrop-blur-xl bg-black/40 flex items-center justify-center rounded-3xl p-6">
-                <div className="bg-surface border border-border-dim p-8 text-center relative max-w-sm w-full shadow-sm mt-4 mb-4 rounded-3xl">
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-16 h-16 bg-surface-light border border-accent-primary-border rounded-2xl flex items-center justify-center shadow-lg">
+              <div className="absolute inset-0 z-10 backdrop-blur-md bg-black/60 flex items-center justify-center rounded-3xl p-6">
+                <div className="bg-surface border border-border-dim p-8 text-center max-w-sm w-full shadow-2xl rounded-3xl flex flex-col items-center">
+                  <div className="w-16 h-16 bg-accent-primary-dim border border-accent-primary-border rounded-full flex items-center justify-center shadow-inner mb-4">
                     <PieChartIcon className="w-8 h-8 text-accent-primary" />
                   </div>
                   
-                  <h3 className="font-bold mt-4 mb-3 tracking-tight text-xl text-white">Smart Infographics Locked</h3>
-                  <p className="text-sm text-gray-400 mb-8 leading-relaxed">Upgrade to Pro to unlock beautiful data visualizations and advanced analytics.</p>
+                  <h3 className="font-bold mb-2 tracking-tight text-xl text-white">Smart Infographics Locked</h3>
+                  <p className="text-sm text-text-muted mb-6 leading-relaxed">Upgrade to Pro to unlock beautiful data visualizations and advanced analytics.</p>
                   
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-[80%]">
-                    <Link to="/subscription" className="block w-full py-3.5 bg-white text-black rounded-xl text-sm font-bold hover:opacity-80 transition-colors shadow-[0_10px_20px_rgba(255,255,255,0.1)]">
-                      Upgrade Now
-                    </Link>
-                  </div>
+                  <Link to="/subscription" className="w-full py-3 bg-white text-black rounded-xl text-sm font-bold hover:bg-gray-200 transition-colors shadow-md">
+                    Upgrade to Pro
+                  </Link>
                 </div>
               </div>
             ) : null}

@@ -92,47 +92,12 @@ const defaultDailyData: DailyData = {
   notes: [],
 };
 
-const testScheduleTasks = [
-  { timeStart: '13:00', timeEnd: '17:00', task: 'blender work', category: 'Work' },
-  { timeStart: '05:30', timeEnd: '06:30', task: 'client hunting and freelancing', category: 'Work' },
-  { timeStart: '18:30', timeEnd: '19:00', task: 'iftari time', category: 'Rest' },
-  { timeStart: '19:00', timeEnd: '21:15', task: 'Ai agent and Saas', category: 'Social' },
-  { timeStart: '21:15', timeEnd: '22:00', task: 'traweeh', category: 'Social' },
-  { timeStart: '22:00', timeEnd: '23:00', task: 'wedding video edit', category: 'Work' }
-];
-
-const generateFakeHistory = () => {
-  return Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (7 - i));
-    return {
-      date: d.toISOString().split('T')[0],
-      schedule: testScheduleTasks.map((t, j) => ({ 
-        ...t, 
-        id: `hist-${i}-${j}`, 
-        status: (Math.random() > 0.2 ? 'completed' : 'pending') as 'completed' | 'pending',
-        actualHours: Math.random() > 0.2 ? 1 : 0
-      })),
-      habits: [],
-      expenses: [],
-      notes: []
-    };
-  });
-};
-
 const defaultState: AppState = {
   userSettings: defaultSettings,
   userProfile: defaultProfile,
-  currentDayData: {
-    ...defaultDailyData,
-    schedule: testScheduleTasks.map((t, i) => ({ ...t, id: `test-${i}`, status: 'pending' as const }))
-  },
-  history: generateFakeHistory(),
-  savedSchedules: [{
-    id: 'test-schedule-1',
-    name: 'Hasan Test Schedule',
-    tasks: testScheduleTasks
-  }],
+  currentDayData: defaultDailyData,
+  history: [],
+  savedSchedules: [],
   isDemoMode: false,
   notifications: [],
 };
@@ -220,24 +185,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
         
         if (!session) {
+          const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
           // Fallback to local storage for guests
           const saved = localStorage.getItem('makeYourFutureState');
-          if (saved) {
+          if (isGuestMode && saved) {
             const parsed = JSON.parse(saved);
             if (!parsed.userSettings?.theme) parsed.userSettings = { ...parsed.userSettings, theme: 'dark' };
             if (!parsed.userProfile) parsed.userProfile = defaultProfile;
             if (!parsed.savedSchedules) parsed.savedSchedules = [];
             if (!parsed.notifications) parsed.notifications = [];
-            if (!parsed.savedSchedules.some((s: any) => s.id === 'test-schedule-1')) {
-              parsed.savedSchedules.push({ id: 'test-schedule-1', name: 'Hasan Test Schedule', tasks: testScheduleTasks });
-            }
-            if (!parsed.currentDayData?.schedule || parsed.currentDayData.schedule.length === 0) {
-              if (!parsed.currentDayData) parsed.currentDayData = defaultDailyData;
-              parsed.currentDayData.schedule = testScheduleTasks.map((t, i) => ({ ...t, id: `test-${i}`, status: 'pending' as const }));
-            }
-            if (!parsed.history || parsed.history.length === 0) {
-              parsed.history = generateFakeHistory();
-            }
+            if (!parsed.currentDayData) parsed.currentDayData = defaultDailyData;
+            if (!parsed.history) parsed.history = [];
             setState(prev => ({ ...parsed, exchangeRatesCache: prev.exchangeRatesCache || parsed.exchangeRatesCache }));
           } else {
             setState(prev => ({ ...defaultState, exchangeRatesCache: prev.exchangeRatesCache }));
@@ -251,11 +209,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         if (loadedData) {
           const isNewUser = !loadedData.profile || !loadedData.settings;
+          const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
           
           let localState: AppState | null = null;
-          const saved = localStorage.getItem('makeYourFutureState');
-          if (saved) {
-            try { localState = JSON.parse(saved); } catch (e) {}
+          // Only merge local state if they are a guest or if they are an existing user (to preserve offline changes)
+          // If they are a brand new signed-up user, we want a clean slate
+          if (isGuestMode || !isNewUser) {
+            const saved = localStorage.getItem('makeYourFutureState');
+            if (saved) {
+              try { localState = JSON.parse(saved); } catch (e) {}
+            }
           }
           
           const loadedState: AppState = {
@@ -288,6 +251,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             notifications: loadedData.notifications?.length > 0 ? loadedData.notifications : (localState?.notifications || []),
             isDemoMode: false
           };
+
+          // --- Cleanup Fake Data ---
+          // Remove "Hasan Test Schedule" template
+          const fakeTemplates = loadedState.savedSchedules.filter(s => s.name === 'Hasan Test Schedule');
+          loadedState.savedSchedules = loadedState.savedSchedules.filter(s => s.name !== 'Hasan Test Schedule');
+          
+          // Remove fake tasks from current day
+          const fakeTaskNames = ['blender work', 'client hunting and freelancing', 'iftari time', 'Ai agent and Saas', 'traweeh', 'wedding video edit'];
+          let fakeScheduleIds: string[] = [];
+          
+          if (loadedState.currentDayData?.schedule) {
+            const fakes = loadedState.currentDayData.schedule.filter(t => fakeTaskNames.includes(t.task));
+            fakeScheduleIds.push(...fakes.map(f => f.id));
+            loadedState.currentDayData.schedule = loadedState.currentDayData.schedule.filter(t => !fakeTaskNames.includes(t.task));
+          }
+          
+          // Remove fake tasks from history
+          if (loadedState.history) {
+            loadedState.history = loadedState.history.map(day => {
+              const fakes = day.schedule.filter(t => fakeTaskNames.includes(t.task));
+              fakeScheduleIds.push(...fakes.map(f => f.id));
+              return {
+                ...day,
+                schedule: day.schedule.filter(t => !fakeTaskNames.includes(t.task))
+              };
+            });
+          }
+          
+          // Delete from Supabase if they exist
+          if (fakeTemplates.length > 0) {
+            fakeTemplates.forEach(t => supabaseService.deleteSavedSchedule(t.id).catch(() => {}));
+          }
+          if (fakeScheduleIds.length > 0) {
+            fakeScheduleIds.forEach(id => supabaseService.deleteSchedule(id).catch(() => {}));
+          }
+          // -------------------------
           
           if (!loadedState.userSettings?.theme) loadedState.userSettings = { ...loadedState.userSettings, theme: 'dark' };
           
@@ -418,7 +417,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const resetState = () => {
-    localStorage.removeItem('isGuestMode');
     localStorage.removeItem('makeYourFutureState');
     setState(prev => ({ ...defaultState, exchangeRatesCache: prev.exchangeRatesCache }));
   };

@@ -3,6 +3,8 @@ import { useNavigate, useLocation, Link } from 'react-router';
 import { supabase } from '../supabaseClient';
 import { Mail, Lock, LogIn, ArrowRight, User } from 'lucide-react';
 
+import { handleGuestSession } from '../utils/guestAuth';
+
 export default function SignIn() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -43,6 +45,8 @@ export default function SignIn() {
       if (error) throw error;
       
       if (data.session) {
+        localStorage.removeItem('zenvex_guest_creds');
+        localStorage.removeItem('isGuestMode');
         navigate('/dashboard');
       }
     } catch (err: any) {
@@ -58,20 +62,37 @@ export default function SignIn() {
 
   const handleGoogleLogin = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`
-        }
-      });
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      const isGuest = session?.user?.email?.startsWith('guest_');
+      
+      if (isGuest) {
+        const { error } = await supabase.auth.linkIdentity({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/dashboard`
+          }
+        });
+        if (error) throw error;
+        localStorage.removeItem('zenvex_guest_creds');
+        localStorage.removeItem('isGuestMode');
+      } else {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/dashboard`
+          }
+        });
+        if (error) throw error;
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with Google');
     }
   };
 
-  const handleGuestLogin = () => {
-    localStorage.setItem('isGuestMode', 'true');
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    await handleGuestSession();
+    setLoading(false);
     navigate('/dashboard');
   };
 
