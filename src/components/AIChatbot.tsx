@@ -228,25 +228,32 @@ ${chatHistory}
 User: ${userMsg.content}
 Assistant:`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          tools: [{ functionDeclarations: [
-            createScheduleFunction, 
-            replaceScheduleFunction,
-            updateFinancesFunction,
-            clearScheduleFunction,
-            undoScheduleFunction,
-            addHabitFunction,
-            addExpenseFunction,
-            addNoteFunction,
-            applyCouponFunction,
-            updateProfileFunction,
-            navigateFunction
-          ] }]
-        }
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout")), 15000);
       });
+
+      const response = await Promise.race([
+        ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: prompt,
+          config: {
+            tools: [{ functionDeclarations: [
+              createScheduleFunction, 
+              replaceScheduleFunction,
+              updateFinancesFunction,
+              clearScheduleFunction,
+              undoScheduleFunction,
+              addHabitFunction,
+              addExpenseFunction,
+              addNoteFunction,
+              applyCouponFunction,
+              updateProfileFunction,
+              navigateFunction
+            ] }]
+          }
+        }),
+        timeoutPromise
+      ]) as any;
 
       let responseText = response.text || "";
 
@@ -395,18 +402,19 @@ Assistant:`;
               const args = call.args as any;
               const code = (args.code || '').toLowerCase();
               if (code === '1856hk') {
-                responseText += "\n\nThe code is correct, but the Pro plan is currently in building process.";
+                applySubscription('Pro', 90, code);
+                responseText += "\n\nCoupon applied! 3 Months Pro plan unlocked.";
                 addNotification({
-                  title: 'Plan in Development',
-                  message: 'Pro plan is currently in building process.',
-                  type: 'warning'
+                  title: 'Coupon Applied',
+                  message: 'Successfully unlocked 3 Months Pro plan!',
+                  type: 'success'
                 });
-              } else if (code === 'leftrciks' || code === 'access') {
+              } else if (code === 'leftricks' || code === 'access') {
                 applySubscription('Pro', 9999, code);
-                responseText += "\n\nAdmin access granted: Pro plan unlocked.";
+                responseText += "\n\nAdmin access granted: Lifetime Pro plan unlocked.";
                 addNotification({
                   title: 'Admin Access',
-                  message: 'Successfully unlocked Pro plan!',
+                  message: 'Successfully unlocked Lifetime Pro plan!',
                   type: 'success'
                 });
               } else {
@@ -456,12 +464,15 @@ Assistant:`;
       }
       
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', content: responseText }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Chatbot error:", error);
+      const errorMessage = error.message === "Timeout" 
+        ? "Something went wrong, please try again" 
+        : "Sorry, I encountered an error connecting to the AI service. Please make sure the API key is configured correctly.";
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'model', 
-        content: "Sorry, I encountered an error connecting to the AI service. Please make sure the API key is configured correctly." 
+        content: errorMessage 
       }]);
     } finally {
       setIsLoading(false);
@@ -477,111 +488,131 @@ Assistant:`;
         dragMomentum={true}
         whileDrag={{ scale: 1.1, cursor: 'grabbing' }}
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-28 right-4 md:bottom-6 md:right-6 w-12 h-12 md:w-14 md:h-14 bg-[#ff2a2a] hover:bg-[#ff4d4d] text-white rounded-full flex items-center justify-center shadow-lg shadow-[#ff2a2a]/20 transition-all z-40 neon-glow touch-none ${isOpen ? 'scale-0' : 'scale-100'}`}
+        className={`fixed z-[999] flex items-center justify-center transition-all bg-accent-primary hover:bg-accent-primary-hover text-[#000000] touch-none ${isOpen ? 'scale-0' : 'scale-100'}`}
+        style={{
+          width: '52px',
+          height: '52px',
+          borderRadius: '50%',
+          bottom: '80px',
+          right: '20px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.35)'
+        }}
       >
-        <MessageSquare className="w-5 h-5 md:w-6 md:h-6" />
+        <MessageSquare className="w-6 h-6 fill-current" />
       </motion.button>
 
       {/* Chat Window */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-0 right-0 left-0 w-full h-[85vh] md:bottom-6 md:right-6 md:left-auto md:w-[400px] md:h-[500px] max-h-[85vh] bg-[#111] border border-[#333] rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#222] bg-[#0a0a0a]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#ff2a2a]/20 flex items-center justify-center text-[#ff2a2a]">
-                  <Bot className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white">Your Tutor</h3>
-                  <p className="text-xs text-emerald-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-[#222] rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0a0a0a]/50">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${
-                    msg.role === 'user' 
-                      ? 'bg-[#ff2a2a] text-white rounded-tr-sm' 
-                      : 'bg-[#222] text-gray-200 rounded-tl-sm border border-[#333] shadow-lg'
-                  }`}>
-                    {msg.role === 'user' ? (
-                      msg.content
-                    ) : (
-                      <div className="prose prose-invert prose-sm max-w-none">
-                        <Markdown>{msg.content}</Markdown>
-                      </div>
-                    )}
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[998] md:hidden"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              className="fixed bottom-0 left-0 right-0 w-full max-h-[70vh] bg-[#111] border-t border-[#333] rounded-t-3xl md:bottom-24 md:right-6 md:left-auto md:w-[400px] md:max-h-[600px] md:border md:rounded-2xl shadow-2xl flex flex-col z-[999] overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-4 border-b border-[#222] bg-[#0a0a0a]">
+                <div className="flex items-center gap-3">
+                  <div className="w-[36px] h-[36px] rounded-full bg-accent-primary/20 flex items-center justify-center text-accent-primary shrink-0">
+                    <Bot className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <h3 className="font-bold text-white text-[15px] leading-tight">Your Tutor</h3>
+                    <p className="text-[12px] font-medium text-accent-primary flex items-center gap-1.5 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent-primary"></span> Online
+                    </p>
                   </div>
                 </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-[#222] border border-[#333] rounded-2xl rounded-tl-sm p-3 flex items-center gap-2 shadow-lg">
-                    <Sparkles className="w-4 h-4 text-[#ff2a2a] animate-pulse" />
-                    <span className="text-sm text-gray-400">Thinking...</span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input */}
-            <div className="p-4 border-t border-[#222] bg-[#0a0a0a] safe-pb">
-              <form 
-                onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-                className="flex items-end gap-2"
-              >
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (input.trim() && !isLoading) {
-                        handleSend();
-                      }
-                    }
-                  }}
-                  onInput={(e) => {
-                    const target = e.target as HTMLTextAreaElement;
-                    target.style.height = 'auto';
-                    target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
-                  }}
-                  placeholder="Ask for advice... (Shift + Enter for new line)"
-                  maxLength={1000}
-                  rows={1}
-                  className="flex-1 bg-[#111] border border-[#333] rounded-2xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff2a2a] transition-colors resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
-                />
                 <button 
-                  type="submit"
-                  disabled={!input.trim() || isLoading}
-                  className="w-10 h-10 rounded-full bg-[#ff2a2a] hover:bg-[#ff4d4d] disabled:opacity-50 disabled:hover:bg-[#ff2a2a] text-white flex items-center justify-center transition-colors shrink-0 mb-0.5"
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-[#222] rounded-full transition-colors shrink-0"
                 >
-                  <Send className="w-4 h-4 ml-0.5" />
+                  <X className="w-5 h-5" />
                 </button>
-              </form>
-              <div className="text-right mt-1">
-                <span className="text-[10px] text-gray-500">{input.length}/1000</span>
               </div>
-            </div>
-          </motion.div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0a0a0a]/50">
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div 
+                      className={`max-w-[85%] px-4 py-3 text-[14px] leading-relaxed ${
+                        msg.role === 'user' 
+                          ? 'bg-accent-primary text-[#1A1A1A] font-medium' 
+                          : 'bg-[#222] text-white border border-[#333]'
+                      }`}
+                      style={{ borderRadius: '16px' }}
+                    >
+                      {msg.role === 'user' ? (
+                        msg.content
+                      ) : (
+                        <div className="prose prose-invert prose-sm max-w-none text-[14px] leading-relaxed">
+                          <Markdown>{msg.content}</Markdown>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex justify-start">
+                    <div 
+                      className="bg-[#222] border border-[#333] px-4 py-3 flex items-center gap-2"
+                      style={{ borderRadius: '16px' }}
+                    >
+                      <Sparkles className="w-4 h-4 text-accent-primary animate-pulse" />
+                      <span className="text-[14px] text-gray-300">Thinking...</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className="p-4 border-t border-[#222] bg-[#0a0a0a] pb-safe">
+                <form 
+                  onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+                  className="flex items-center gap-3 w-full"
+                >
+                  <textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (input.trim() && !isLoading) {
+                          handleSend();
+                        }
+                      }
+                    }}
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement;
+                      target.style.height = 'auto';
+                      target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+                    }}
+                    placeholder="Ask your tutor..."
+                    maxLength={1000}
+                    rows={1}
+                    className="flex-1 bg-[#111] border border-[#333] rounded-full px-5 py-3 text-[14px] text-white focus:outline-none focus:border-accent-primary transition-colors resize-none min-h-[44px] max-h-[120px] overflow-y-auto"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={!input.trim() || isLoading}
+                    className="w-11 h-11 rounded-full bg-accent-primary hover:bg-accent-primary-hover disabled:opacity-50 disabled:hover:bg-accent-primary text-[#1A1A1A] flex items-center justify-center transition-colors shrink-0"
+                  >
+                    <Send className="w-5 h-5 ml-0.5" />
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </>

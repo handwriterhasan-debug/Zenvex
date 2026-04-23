@@ -1,11 +1,11 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, CheckCircle2, MoreVertical, Trash2, Edit2, X, PieChart as PieChartIcon } from 'lucide-react';
+import { Plus, Clock, CheckCircle2, MoreVertical, Trash2, Edit2, X, PieChart as PieChartIcon, XCircle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useState } from 'react';
 import { CustomTimePicker } from '../components/CustomTimePicker';
 import { formatTime12Hour } from '../utils/timeUtils';
 import { LiveCalendar } from '../components/LiveCalendar';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
 export default function Schedule() {
   const { currentDayData, addSchedule, updateSchedule, saveScheduleTemplate, clearSchedule, deleteScheduleTask } = useAppContext();
@@ -154,7 +154,7 @@ export default function Schedule() {
       }
 
       updateSchedule(completionModal.taskId, { 
-        status: 'completed',
+        status: actualHours < plannedHours ? 'incomplete' : 'completed',
         actualHours,
         excuse: completionModal.excuse
       });
@@ -167,7 +167,7 @@ export default function Schedule() {
       .filter(s => s.category === cat.name)
       .reduce((acc, curr) => {
         const planned = calculatePlannedHours(curr.timeStart, curr.timeEnd);
-        return acc + (curr.status === 'completed' && curr.actualHours !== undefined ? Number(curr.actualHours) : planned);
+        return acc + ((curr.status === 'completed' || curr.status === 'incomplete') && curr.actualHours !== undefined ? Number(curr.actualHours) : planned);
       }, 0);
     return { name: cat.name, value: hours, color: cat.color.replace('bg-', 'text-') }; // Just a hack to get color, we'll map it properly
   }).filter(d => d.value > 0);
@@ -177,7 +177,7 @@ export default function Schedule() {
     return {
       name: task.task.length > 15 ? task.task.substring(0, 15) + '...' : task.task,
       Planned: planned,
-      Actual: task.status === 'completed' && task.actualHours !== undefined ? Number(task.actualHours) : 0,
+      Actual: (task.status === 'completed' || task.status === 'incomplete') && task.actualHours !== undefined ? Number(task.actualHours) : 0,
     };
   });
 
@@ -245,62 +245,124 @@ export default function Schedule() {
       </div>
 
       {scheduleChartData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
-            <h2 className="text-xl font-bold font-display mb-6 flex items-center gap-2 text-text-main">
-              <PieChartIcon className="w-5 h-5 text-blue-500" />
-              Time Distribution
-            </h2>
-            <div className="h-[250px] w-full relative flex items-center justify-center">
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                <span className="text-2xl font-bold font-display text-white">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 mt-4">
+          <div className="bg-surface border border-border-dim rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden group hover:border-accent-primary-border transition-all duration-500">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-accent-primary-dim rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none"></div>
+            
+            <div className="flex items-center justify-between mb-8 relative z-10">
+              <h2 className="text-xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+                <PieChartIcon className="w-5 h-5 text-accent-primary" />
+                Time Distribution
+              </h2>
+            </div>
+            
+            <div className="h-[280px] w-full relative flex items-center justify-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 pt-2">
+                <span className="text-4xl font-bold font-display text-white tracking-tight drop-shadow-md">
                   {scheduleChartData.reduce((a, b) => a + b.value, 0).toFixed(1).replace(/\.0$/, '')}h
                 </span>
-                <span className="text-xs text-gray-400 uppercase tracking-widest mt-1">Total</span>
+                <span className="text-[11px] text-accent-primary uppercase tracking-[0.25em] mt-1 font-bold">Total Time</span>
               </div>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
+                  <defs>
+                    {[
+                      { start: '#39ff14', end: '#1f8c0a' },
+                      { start: '#66ff4d', end: '#29b314' },
+                      { start: '#99ff85', end: '#3ddb1f' },
+                      { start: '#ccffbd', end: '#5ce638' },
+                      { start: '#e6ffdb', end: '#7fe864' },
+                      { start: '#ffffff', end: '#a2ed8f' }
+                    ].map((c, i) => (
+                      <linearGradient key={`grad-${i}`} id={`pieGrad-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor={c.start} />
+                        <stop offset="100%" stopColor={c.end} />
+                      </linearGradient>
+                    ))}
+                    <filter id="pieGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="4" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
                   <Pie
                     data={scheduleChartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
+                    innerRadius={80}
+                    outerRadius={105}
+                    paddingAngle={6}
                     dataKey="value"
                     stroke="none"
+                    cornerRadius={12}
+                    animationBegin={0}
+                    animationDuration={1500}
+                    animationEasing="ease-out"
                   >
                     {scheduleChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={getHexColor(categories.find(c => c.name === entry.name)?.color || '')} />
+                      <Cell key={`cell-${index}`} fill={`url(#pieGrad-${index % 6})`} filter="url(#pieGlow)" />
                     ))}
                   </Pie>
                   <RechartsTooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-dim)', borderRadius: '12px', color: 'var(--text-main)' }}
+                    contentStyle={{ backgroundColor: 'rgba(10, 10, 10, 0.9)', backdropFilter: 'blur(10px)', border: '1px solid var(--border-strong)', borderRadius: '16px', color: '#fff', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
+                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                     formatter={(value: number) => [`${value.toFixed(1)}h`, 'Time']}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    iconType="circle"
+                    formatter={(value) => <span className="text-gray-300 font-medium text-xs ml-1">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
-            <h2 className="text-xl font-bold font-display mb-6 flex items-center gap-2 text-text-main">
-              <Clock className="w-5 h-5 text-emerald-500" />
-              Planned vs Actual Hours
-            </h2>
-            <div className="h-[250px] w-full">
+          <div className="bg-surface border border-border-dim rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden group hover:border-accent-primary-border transition-all duration-500">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-accent-primary-dim rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none"></div>
+
+            <div className="flex items-center justify-between mb-8 relative z-10">
+              <h2 className="text-xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+                <Clock className="w-5 h-5 text-emerald-500" />
+                Planned vs Actual Hours
+              </h2>
+            </div>
+            
+            <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={plannedVsActualData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-dim)" vertical={false} />
-                  <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fill: 'var(--text-faint)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-faint)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <defs>
+                    <linearGradient id="actualGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#39ff14" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#1f8c0a" stopOpacity={1} />
+                    </linearGradient>
+                    <linearGradient id="plannedGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1f8c0a" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#0a3d03" stopOpacity={0.8} />
+                    </linearGradient>
+                    <filter id="barGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff15" vertical={false} />
+                  <XAxis dataKey="name" stroke="#a3a3a3" tick={{ fill: '#a3a3a3', fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} dy={12} />
+                  <YAxis stroke="#a3a3a3" tick={{ fill: '#a3a3a3', fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} dx={-10} />
                   <RechartsTooltip 
                     cursor={{ fill: 'var(--bg-surface-hover)' }}
-                    contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-dim)', borderRadius: '12px', color: 'var(--text-main)' }}
+                    contentStyle={{ backgroundColor: 'rgba(10, 10, 10, 0.9)', backdropFilter: 'blur(10px)', border: '1px solid var(--border-strong)', borderRadius: '16px', color: '#fff', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
+                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                     formatter={(value: number, name: string) => [`${value.toFixed(1)}h`, name]}
                   />
-                  <Bar dataKey="Planned" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                  <Bar dataKey="Actual" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                  <Legend 
+                    verticalAlign="top" 
+                    align="right"
+                    iconType="circle"
+                    wrapperStyle={{ paddingBottom: '20px' }}
+                    formatter={(value) => <span className="text-gray-300 font-medium text-xs ml-1">{value}</span>}
+                  />
+                  <Bar dataKey="Planned" fill="url(#plannedGradient)" radius={[6, 6, 0, 0]} maxBarSize={24} animationDuration={1500} />
+                  <Bar dataKey="Actual" fill="url(#actualGradient)" radius={[6, 6, 0, 0]} maxBarSize={24} animationDuration={1500} filter="url(#barGlow)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -328,7 +390,13 @@ export default function Schedule() {
                     {item.status === 'completed' && item.actualHours !== undefined && (
                       <>
                         <span className="hidden sm:inline">•</span>
-                        <span className="text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">{item.actualHours}h completed</span>
+                        <span className="text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">{item.actualHours}h completed</span>
+                      </>
+                    )}
+                    {item.status === 'incomplete' && item.actualHours !== undefined && (
+                      <>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-md border border-red-500/20">{item.actualHours}h completed (Incomplete)</span>
                       </>
                     )}
                   </div>
@@ -348,6 +416,11 @@ export default function Schedule() {
                   {item.status === 'in-progress' && (
                     <span className="flex items-center gap-1.5 text-accent-primary text-sm font-medium bg-accent-primary-dim px-3 py-1.5 rounded-full border border-accent-primary-border">
                       <div className="w-2 h-2 rounded-full bg-accent-primary animate-pulse"></div> In Progress
+                    </span>
+                  )}
+                  {item.status === 'incomplete' && (
+                    <span className="flex items-center gap-1 text-red-500 text-sm font-medium bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20">
+                      <XCircle className="w-4 h-4" /> Incomplete
                     </span>
                   )}
                   {item.status === 'pending' && (
@@ -492,14 +565,14 @@ export default function Schedule() {
                         animate={{ opacity: 1, height: 'auto' }}
                         className="space-y-2"
                       >
-                        <label className="block text-sm font-medium text-accent-primary">
-                          You completed fewer hours than planned ({plannedHours.toFixed(1)}h). Why?
+                        <label className="block text-sm font-medium text-red-500">
+                          Why didn't you complete the full time? Write your excuse.
                         </label>
                         <textarea 
                           value={completionModal.excuse}
                           onChange={e => setCompletionModal({...completionModal, excuse: e.target.value})}
-                          placeholder="Enter your excuse..."
-                          className="w-full bg-surface-light border border-accent-primary-border rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-accent-primary min-h-[80px]"
+                          placeholder="Your excuse here..."
+                          className="w-full bg-surface-light border border-red-500/50 rounded-lg px-4 py-2 text-text-main focus:outline-none focus:border-red-500 min-h-[80px]"
                         />
                       </motion.div>
                     );
@@ -517,9 +590,9 @@ export default function Schedule() {
                 </button>
                 <button 
                   onClick={handleCompleteTask}
-                  className="bg-accent-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-accent-primary-hover transition-colors"
+                  className={`${schedule.length && completionModal.taskId && Number(completionModal.actualHours) < calculatePlannedHours(schedule.find(t => t.id === completionModal.taskId)?.timeStart || '0', schedule.find(t => t.id === completionModal.taskId)?.timeEnd || '0') ? 'bg-red-500 hover:bg-red-600' : 'bg-accent-primary hover:bg-accent-primary-hover'} text-white px-6 py-2 rounded-lg font-medium transition-colors`}
                 >
-                  Complete
+                  {schedule.length && completionModal.taskId && Number(completionModal.actualHours) < calculatePlannedHours(schedule.find(t => t.id === completionModal.taskId)?.timeStart || '0', schedule.find(t => t.id === completionModal.taskId)?.timeEnd || '0') ? 'Mark as Incomplete' : 'Complete'}
                 </button>
               </div>
             </motion.div>

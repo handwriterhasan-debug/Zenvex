@@ -4,7 +4,7 @@ export interface ScheduleItem {
   timeEnd: string;
   task: string;
   category: string;
-  status: 'pending' | 'in-progress' | 'completed';
+  status: 'pending' | 'in-progress' | 'completed' | 'incomplete';
   actualHours?: number;
   excuse?: string;
 }

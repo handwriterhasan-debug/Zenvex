@@ -3,6 +3,8 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
+  --breakpoint-md: 1081px;
+  
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
@@ -30,22 +32,22 @@
 }
 
 :root {
-  /* Black Bluish Gradient Theme */
-  --bg-main: #020617;
-  --bg-surface: #0f172a;
-  --bg-surface-hover: #1e293b;
-  --bg-surface-light: #1e293b;
-  --bg-surface-lighter: #334155;
+  /* Dark Theme */
+  --bg-main: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-surface-hover: #111111;
+  --bg-surface-light: #111111;
+  --bg-surface-lighter: #1a1a1a;
   
   --text-main: #ffffff;
-  --text-muted: #cbd5e1;
-  --text-dim: #94a3b8;
-  --text-faint: #64748b;
+  --text-muted: #f0f0f0;
+  --text-dim: #e0e0e0;
+  --text-faint: #cccccc;
   
-  --border-dim: rgba(255, 255, 255, 0.05);
-  --border-main: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --border-stronger: rgba(255, 255, 255, 0.2);
+  --border-dim: #1a1a1a;
+  --border-main: #222222;
+  --border-strong: #333333;
+  --border-stronger: #444444;
 
   --bg-overlay-light: rgba(255, 255, 255, 0.02);
   --bg-overlay-strong: rgba(255, 255, 255, 0.04);
@@ -53,21 +55,62 @@
   --bg-overlay-darker: rgba(255, 255, 255, 0.2);
 
   /* Lime Green Theme */
-  --accent-primary: #84cc16;
-  --accent-primary-hover: #65a30d;
-  --accent-primary-dim: rgba(132, 204, 22, 0.15);
-  --accent-primary-border: rgba(132, 204, 22, 0.3);
-  --accent-primary-border-strong: rgba(132, 204, 22, 0.5);
-  --accent-primary-bg-hover: rgba(132, 204, 22, 0.1);
-  --accent-gradient-from: rgba(132, 204, 22, 0.1);
-  --accent-gradient-via: rgba(132, 204, 22, 0.05);
-  --accent-gradient-to: rgba(132, 204, 22, 0);
-  --accent-shadow: rgba(132, 204, 22, 0.2);
-  --accent-shadow-light: rgba(132, 204, 22, 0.05);
+  --accent-primary: #39ff14;
+  --accent-primary-hover: #32e612;
+  --accent-primary-dim: rgba(57, 255, 20, 0.15);
+  --accent-primary-border: rgba(57, 255, 20, 0.3);
+  --accent-primary-border-strong: rgba(57, 255, 20, 0.5);
+  --accent-primary-bg-hover: rgba(57, 255, 20, 0.1);
+  --accent-gradient-from: rgba(57, 255, 20, 0.1);
+  --accent-gradient-via: rgba(57, 255, 20, 0.05);
+  --accent-gradient-to: rgba(57, 255, 20, 0);
+  --accent-shadow: rgba(57, 255, 20, 0.2);
+  --accent-shadow-light: rgba(57, 255, 20, 0.05);
+}
+
+/* Light Theme */
+:root[data-theme="light"], :root.light-theme, .light-theme {
+  --bg-main: #f0f0f0;
+  --bg-surface: #efefef;
+  --bg-surface-hover: #e8e8e8;
+  --bg-surface-light: #efefef;
+  --bg-surface-lighter: #e8e8e8;
+  
+  --text-main: #1A1A1A;
+  --text-muted: #212121;
+  --text-dim: #333333;
+  --text-faint: #444444;
+  
+  --border-dim: rgba(0, 0, 0, 0.05);
+  --border-main: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --border-stronger: rgba(0, 0, 0, 0.2);
+
+  --bg-overlay-light: rgba(0, 0, 0, 0.02);
+  --bg-overlay-strong: rgba(0, 0, 0, 0.04);
+  --bg-overlay-dark: rgba(0, 0, 0, 0.08); /* Soft dark for light mode */
+  --bg-overlay-darker: rgba(0, 0, 0, 0.12);
+
+  --accent-primary: #4CAF50;
+  --accent-primary-hover: #43A047;
+  --accent-primary-dim: rgba(76, 175, 80, 0.15);
+  --accent-primary-border: rgba(76, 175, 80, 0.3);
+  --accent-primary-border-strong: rgba(76, 175, 80, 0.5);
+  --accent-primary-bg-hover: rgba(76, 175, 80, 0.1);
+  --accent-gradient-from: rgba(76, 175, 80, 0.1);
+  --accent-gradient-via: rgba(76, 175, 80, 0.05);
+  --accent-gradient-to: rgba(76, 175, 80, 0);
+  --accent-shadow: rgba(76, 175, 80, 0.2);
+  --accent-shadow-light: rgba(76, 175, 80, 0.05);
+}
+
+.light-theme .bg-accent-primary, 
+.light-theme .bg-accent-primary-hover {
+  color: #FFFFFF !important;
 }
 
 body {
-  background: linear-gradient(135deg, #020617 0%, #0f172a 100%) !important;
+  background: var(--bg-main) !important;
   background-attachment: fixed !important;
   color: var(--text-main) !important;
   font-family: var(--font-sans);
@@ -78,10 +121,63 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.85;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.discipline-wrapper {
+  border-radius: 50%;
+  animation: pulse-glow 3s infinite ease-in-out;
+  border: none !important;
+  outline: none !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: visible !important;
+  transform-origin: center;
+}
+
+body.light-theme {
+  background: var(--bg-main) !important;
+}
+
+/* Specific component overrides for light mode */
+.light-theme aside,
+.light-theme header {
+  background-color: #e8e8e8 !important;
+  box-shadow: none !important;
+}
+
+.light-theme .bg-surface, 
+.light-theme .bg-surface-light, 
+.light-theme .bg-\[\#0a0a0a\] {
+  background-color: #efefef !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+  border-color: var(--border-main) !important;
+}
+
 html {
   overflow-x: hidden;
   max-width: 100vw;
   width: 100%;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-main) !important;
+  color: var(--text-main) !important;
+}
+
+.recharts-tooltip-wrapper .recharts-tooltip-item-name {
+  color: var(--text-muted) !important;
 }
 
 *, *::before, *::after {
@@ -150,7 +246,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Premium UI Overrides */
 .bg-surface, .bg-\[\#0a0a0a\] {
   border-radius: 16px !important;
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--border-dim) !important;
   box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.2) !important;
 }
 .rounded-2xl, .rounded-3xl, .rounded-xl {
@@ -200,12 +296,44 @@ button, .nav-link, [role="button"] {
 .text-white { color: var(--text-main) !important; }
 .text-gray-300 { color: var(--text-muted) !important; }
 .text-gray-400 { color: var(--text-dim) !important; }
-.text-gray-500 { color: var(--text-faint) !important; }
+.text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900 { 
+  color: var(--text-faint) !important; 
+}
+[class*="text-zinc-"], [class*="text-slate-"], [class*="text-neutral-"], [class*="text-stone-"] {
+  color: var(--text-dim) !important;
+}
+
+/* Force 100% Opacity and Readability Globally For All Text */
+p, span, h1, h2, h3, h4, h5, h6, label, strong, em, b, i, blockquote, q, cite, dl, dt, dd, input, textarea, select {
+  opacity: 1 !important;
+}
+text, tspan, .recharts-text {
+  opacity: 1 !important;
+  font-weight: 500 !important;
+}
+[class*="text-white/"] {
+  color: var(--text-main) !important;
+  opacity: 1 !important;
+}
+[class*="opacity-"]:not(div) {
+  opacity: 1 !important;
+}
+::placeholder {
+  color: var(--text-dim) !important;
+  opacity: 1 !important;
+}
 
 .bg-black\/40 { background-color: var(--bg-overlay-dark) !important; }
 .bg-black\/60 { background-color: var(--bg-overlay-darker) !important; }
 .bg-white\/5 { background-color: var(--bg-overlay-light) !important; }
 .bg-white\/10 { background-color: var(--bg-overlay-strong) !important; }
+.bg-white\/20 { background-color: var(--bg-overlay-dark) !important; }
+
+.hover\:bg-white\/5:hover { background-color: var(--bg-overlay-strong) !important; }
+.hover\:bg-white\/10:hover { background-color: var(--bg-overlay-dark) !important; }
+.hover\:bg-white\/20:hover { background-color: var(--bg-overlay-darker) !important; }
+
+.hover\:text-white:hover { color: var(--text-main) !important; }
 
 /* Fix for transparent text with gradient background */
 .from-white { --tw-gradient-from: var(--text-main) !important; }
@@ -240,74 +368,82 @@ body, html {
   -webkit-overflow-scrolling: touch !important;
 }
 
-@media (max-width: 768px) {
-  .overflow-y-auto, .overflow-auto {
-    overflow-y: auto !important;
-  }
-}
-
-/* Mobile Size Fix for screens under 480px */
-@media (max-width: 480px) {
-  /* Prevent iOS zoom on inputs */
-  input, textarea, select {
-    font-size: 16px !important;
-  }
-
-  /* Reduce icon sizes */
-  svg.lucide {
-    width: 18px !important;
-    height: 18px !important;
+@media (max-width: 1080px) {
+  /* Font size overrides */
+  h1, h2, h3, h4, h5, h6 {
+    font-size: 22px !important;
+    line-height: 1.2 !important;
   }
   
-  /* Reduce font sizes */
-  body { font-size: 13px !important; }
-  .text-xs { font-size: 10px !important; line-height: 14px !important; }
-  .text-sm { font-size: 12px !important; line-height: 16px !important; }
-  .text-base { font-size: 13px !important; line-height: 18px !important; }
-  .text-lg { font-size: 14px !important; line-height: 20px !important; }
-  .text-xl { font-size: 16px !important; line-height: 22px !important; }
-  .text-2xl { font-size: 18px !important; line-height: 24px !important; }
-  .text-3xl { font-size: 20px !important; line-height: 26px !important; }
-  .text-4xl { font-size: 22px !important; line-height: 28px !important; }
-  .text-5xl { font-size: 24px !important; line-height: 30px !important; }
-  .text-clamp-h1 { font-size: 24px !important; }
-  .text-clamp-h2 { font-size: 20px !important; }
-  .text-clamp-h3 { font-size: 18px !important; }
-
-  /* Reduce card padding */
-  .p-4, .p-5, .p-6, .p-8 { padding: 12px !important; }
-  .px-4, .px-5, .px-6, .px-8 { padding-left: 12px !important; padding-right: 12px !important; }
-  .py-4, .py-5, .py-6, .py-8 { padding-top: 12px !important; padding-bottom: 12px !important; }
-
-  /* Make buttons compact */
-  button, .nav-link, [role="button"] {
-    min-height: 36px !important;
-    padding-top: 6px !important;
-    padding-bottom: 6px !important;
+  p, div, span, li {
+    font-size: 14px;
+  }
+  
+  label, .text-xs, .text-\[10px\], .text-sm {
+    font-size: 12px !important;
+  }
+  
+  /* All cards full width with proper padding */
+  .bg-surface, .bg-surface-light, .bg-\[\#0a0a0a\] {
+    width: 100% !important;
+    border-radius: 16px !important;
+    padding: 16px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* All buttons full width, 48px height, 12px borders */
+  button, .button, a[role="button"], [role="button"]:not(.nav-link) {
+    width: 100% !important;
+    min-height: 48px !important;
+    height: auto !important;
+    border-radius: 12px !important;
   }
 
-  /* Sidebar width */
-  aside.w-64 { width: 220px !important; }
-  aside.w-72 { width: 240px !important; }
+  /* Exclude special icons/buttons from full width */
+  header button, 
+  .discipline-wrapper button, 
+  .calendar-grid button,
+  button[title], 
+  nav button, 
+  nav a, 
+  .icon-btn,
+  .recharts-wrapper button,
+  input[type="checkbox"] + button,
+  .sidebar button {
+    width: auto !important;
+    min-height: auto !important;
+  }
   
-  /* Fix specific oversized elements */
-  .w-12 { width: 36px !important; }
-  .h-12 { height: 36px !important; }
-  .w-16 { width: 44px !important; }
-  .h-16 { height: 44px !important; }
-  .w-20 { width: 52px !important; }
-  .h-20 { height: 52px !important; }
-  .w-24 { width: 60px !important; }
-  .h-24 { height: 60px !important; }
+  /* Compact calendar cells */
+  .calendar-grid {
+    gap: 4px !important;
+  }
   
-  /* Reduce gaps */
-  .gap-4 { gap: 10px !important; }
-  .gap-5 { gap: 12px !important; }
-  .gap-6 { gap: 14px !important; }
-  .gap-8 { gap: 16px !important; }
+  .calendar-grid > button {
+    width: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    font-size: 10px !important;
+    min-height: auto !important;
+    border-radius: 6px !important;
+  }
   
-  .space-y-4 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(10px * calc(1 - var(--tw-space-y-reverse))) !important; margin-bottom: calc(10px * var(--tw-space-y-reverse)) !important; }
-  .space-y-6 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(14px * calc(1 - var(--tw-space-y-reverse))) !important; margin-bottom: calc(14px * var(--tw-space-y-reverse)) !important; }
-  .space-y-8 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(16px * calc(1 - var(--tw-space-y-reverse))) !important; margin-bottom: calc(16px * var(--tw-space-y-reverse)) !important; }
+  /* Fix horizontal scrolling and spacing */
+  html, body {
+    overflow-x: hidden !important;
+  }
+  
+  #main-scroll-container, main {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    gap: 16px !important;
+  }
+  
+  /* Sidebar handling */
+  aside {
+    display: none !important;
+  }
 }
 

@@ -144,12 +144,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }));
       setExchangeRatesOffline(false);
     } catch (error) {
-      console.error('Failed to fetch exchange rates:', error);
-      // Use fallback hardcoded rates based on user's table
+      // Use fallback hardcoded rates based on user's table silently to avoid console logs
       setState(prev => ({
         ...prev,
         exchangeRatesCache: {
-          rates: {
+          rates: prev.exchangeRatesCache?.rates?.USD ? prev.exchangeRatesCache.rates : {
             USD: 1,
             PKR: 279.00,
             GBP: 0.754074,
@@ -208,7 +207,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const loadedData = await supabaseService.loadUserData(session.user.id);
         
         if (loadedData) {
-          const isNewUser = !loadedData.profile || !loadedData.settings;
+          const isNewUser = (!loadedData.profile || !loadedData.settings) && !loadedData.hasError;
           const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
           
           let localState: AppState | null = null;
@@ -358,7 +357,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setState(prev => ({ ...loadedState, exchangeRatesCache: prev.exchangeRatesCache || loadedState.exchangeRatesCache }));
         }
       } catch (err: any) {
-        console.error('Failed to load state', err);
+        if (err.message !== 'Supabase getSession timeout') {
+          console.error('Failed to load state', err);
+        }
         
         let localSaveWorks = false;
         try {
@@ -385,8 +386,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           } else {
             setSyncError(null);
           }
-        } catch (checkErr) {
-          console.error('Supabase check failed or timed out', checkErr);
+        } catch (checkErr: any) {
+          if (checkErr.message !== 'Timeout') {
+            console.error('Supabase check failed or timed out', checkErr);
+          }
           setSyncError(null);
         }
         
@@ -426,11 +429,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     localStorage.setItem('makeYourFutureState', JSON.stringify(state));
     
-    // Apply theme to body
+    // Apply theme to body and html
     if (state.userSettings.theme === 'light') {
       document.body.classList.add('light-theme');
+      document.documentElement.classList.add('light-theme');
+      document.documentElement.setAttribute('data-theme', 'light');
     } else {
       document.body.classList.remove('light-theme');
+      document.documentElement.classList.remove('light-theme');
+      document.documentElement.removeAttribute('data-theme');
     }
   }, [state, isStateLoaded]);
 
@@ -682,7 +689,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     }
 
-    const disciplineScore = Math.round(taskScore + habitScore);
+    const disciplineScore = Math.max(0, Math.round(taskScore + habitScore));
     
     if (stateData.userProfile.disciplineScore !== disciplineScore) {
       await updateProfile({ disciplineScore });

@@ -277,21 +277,30 @@ export default function Profile() {
                 </div>
                 {userProfile.plan !== 'Free' && userProfile.subscriptionStartDate && userProfile.subscriptionEndDate && (
                   <div className="pt-4 border-t border-white/5">
-                    <div className="flex justify-between text-xs text-gray-400 font-bold mb-2">
-                      <span>Subscription Timeline</span>
-                      <span>
-                        {Math.max(0, Math.floor((new Date().getTime() - new Date(userProfile.subscriptionStartDate).getTime()) / (1000 * 60 * 60 * 24)))} / 
-                        {Math.max(1, Math.floor((new Date(userProfile.subscriptionEndDate).getTime() - new Date(userProfile.subscriptionStartDate).getTime()) / (1000 * 60 * 60 * 24)))} days
-                      </span>
-                    </div>
-                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-rose-500 rounded-full transition-all duration-1000"
-                        style={{ 
-                          width: `${Math.min(100, Math.max(0, ((new Date().getTime() - new Date(userProfile.subscriptionStartDate).getTime()) / (new Date(userProfile.subscriptionEndDate).getTime() - new Date(userProfile.subscriptionStartDate).getTime())) * 100))}%` 
-                        }}
-                      />
-                    </div>
+                    {Math.floor((new Date(userProfile.subscriptionEndDate).getTime() - new Date(userProfile.subscriptionStartDate).getTime()) / (1000 * 60 * 60 * 24)) >= 9999 ? (
+                      <div className="flex justify-between text-xs text-gray-400 font-bold mb-2">
+                        <span>Subscription Timeline</span>
+                        <span className="text-emerald-500">Lifetime Pro</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-xs text-gray-400 font-bold mb-2">
+                          <span>Subscription Timeline</span>
+                          <span>
+                            {Math.max(0, Math.floor((new Date().getTime() - new Date(userProfile.subscriptionStartDate).getTime()) / (1000 * 60 * 60 * 24)))} / 
+                            {Math.max(1, Math.floor((new Date(userProfile.subscriptionEndDate).getTime() - new Date(userProfile.subscriptionStartDate).getTime()) / (1000 * 60 * 60 * 24)))} days
+                          </span>
+                        </div>
+                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-rose-500 rounded-full transition-all duration-1000"
+                            style={{ 
+                              width: `${Math.min(100, Math.max(0, ((new Date().getTime() - new Date(userProfile.subscriptionStartDate).getTime()) / (new Date(userProfile.subscriptionEndDate).getTime() - new Date(userProfile.subscriptionStartDate).getTime())) * 100))}%` 
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

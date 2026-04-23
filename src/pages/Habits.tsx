@@ -342,7 +342,7 @@ export default function Habits() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="flex flex-wrap gap-1.5 md:gap-2 pb-2">
+            <div className="calendar-grid flex flex-wrap gap-1.5 md:gap-2 pb-2">
               {generateCalendar(habit).map((day, i) => {
                 let stateClass = '';
                 if (day.completed) {

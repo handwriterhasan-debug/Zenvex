@@ -21,7 +21,7 @@ CREATE TABLE profiles (
 -- User Settings table
 CREATE TABLE user_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT,
   day_end_time TEXT DEFAULT '23:59',
   theme TEXT DEFAULT 'dark',

@@ -3,15 +3,49 @@ import { DailyData, ExpenseItem, HabitItem, NoteItem, ScheduleItem, UserProfile,
 
 export const supabaseService = {
   async loadUserData(userId: string) {
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    const { data: settings } = await supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle();
-    const { data: schedules } = await supabase.from('schedules').select('*').eq('user_id', userId);
-    const { data: habits } = await supabase.from('habits').select('*').eq('user_id', userId);
-    const { data: habitLogs } = await supabase.from('habit_logs').select('*').eq('user_id', userId);
-    const { data: expenses } = await supabase.from('expenses').select('*').eq('user_id', userId);
-    const { data: notes } = await supabase.from('notes').select('*').eq('user_id', userId);
-    const { data: savedSchedules } = await supabase.from('saved_schedules').select('*').eq('user_id', userId);
-    const { data: notifications } = await supabase.from('notifications').select('*').eq('user_id', userId);
+    // We wrap each fetch in a try/catch or use an array of promises with .catch() to prevent a single missing table from failing the entire load.
+    const safeFetch = async (query: any) => {
+      try {
+        const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 5000));
+        return await Promise.race([query, timeoutPromise]);
+      } catch (e: any) {
+        if (e.message !== 'Query timeout') {
+          console.warn('Table fetch error:', e);
+        }
+        return { data: null, error: e };
+      }
+    };
+
+    const fetches = await Promise.all([
+      safeFetch(supabase.from('profiles').select('*').eq('id', userId).maybeSingle()),
+      safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle()),
+      safeFetch(supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle()),
+      safeFetch(supabase.from('schedules').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('habit_logs').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('expenses').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('notes').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('saved_schedules').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('notifications').select('*').eq('user_id', userId))
+    ]);
+
+    const hasError = fetches.some(f => f.error != null);
+
+    const [
+      { data: profile }, { data: userProfile }, { data: settings },
+      { data: schedules }, { data: habits }, { data: habitLogs },
+      { data: expenses }, { data: notes }, { data: savedSchedules },
+      { data: notifications }
+    ] = fetches;
+    
+    // In case the settings table uses 'id' instead of 'user_id'
+    let finalSettings = settings;
+    if (!finalSettings && !hasError) {
+      const { data: altSettings } = await safeFetch(supabase.from('user_settings').select('*').eq('id', userId).maybeSingle());
+      finalSettings = altSettings;
+    }
+
+    const actualProfile = profile || userProfile;
 
     // Construct AppState from relational data
     const allDates = new Set(
@@ -71,22 +105,24 @@ export const supabaseService = {
     }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
     return {
-      profile: profile ? {
-        name: profile.name,
-        gender: 'Not specified',
-        age: 'Not specified',
-        country: 'Not specified',
-        plan: (profile.subscription_plan === 'pro' ? 'Pro' : profile.subscription_plan === 'premium' ? 'Premium' : 'Free') as 'Free' | 'Pro' | 'Premium',
-        disciplineScore: profile.discipline_score || 0
+      hasError,
+      profile: actualProfile ? {
+        name: actualProfile.name,
+        gender: actualProfile.gender || 'Not specified',
+        age: actualProfile.age || 'Not specified',
+        country: actualProfile.country || 'Not specified',
+        plan: ((actualProfile.plan?.toLowerCase() === 'pro' || actualProfile.subscription_plan === 'pro') ? 'Pro' : 
+              (actualProfile.plan?.toLowerCase() === 'premium' || actualProfile.subscription_plan === 'premium') ? 'Premium' : 'Free') as 'Free' | 'Pro' | 'Premium',
+        disciplineScore: actualProfile.discipline_score || 0
       } : undefined,
-      settings: (settings || profile) ? {
-        name: profile?.name || settings?.name || 'User',
-        dayEndTime: profile?.day_end_time || settings?.day_end_time || '23:59',
-        theme: settings?.theme || 'dark',
-        initialBalance: settings?.initial_balance || 0,
-        savingsBalance: settings?.savings_balance || 0,
-        monthlyIncome: settings?.monthly_income || 0,
-        currency: settings?.currency || 'PKR'
+      settings: (finalSettings || actualProfile) ? {
+        name: actualProfile?.name || finalSettings?.name || 'User',
+        dayEndTime: actualProfile?.day_end_time || finalSettings?.day_end_time || '23:59',
+        theme: finalSettings?.theme || 'dark',
+        initialBalance: finalSettings?.initial_balance || 0,
+        savingsBalance: finalSettings?.savings_balance || 0,
+        monthlyIncome: finalSettings?.monthly_income || 0,
+        currency: finalSettings?.currency || 'PKR'
       } : undefined,
       history,
       savedSchedules: (savedSchedules || []).map(s => ({
@@ -269,27 +305,35 @@ export const supabaseService = {
   },
 
   async upsertProfile(userId: string, profile: UserProfile) {
-    const { data, error } = await supabase.from('profiles').upsert({
+    const payload = {
       id: userId,
       name: profile.name,
-      subscription_plan: profile.plan?.toLowerCase() || 'free',
+      plan: profile.plan || 'Free', // for profiles
+      subscription_plan: profile.plan?.toLowerCase() || 'free', // for user_profiles
       discipline_score: profile.disciplineScore || 0,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'id' }).select().single();
-    if (error) throw error;
-    return data;
+    };
+    
+    // Try profiles first, if fails try user_profiles
+    const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      await supabase.from('user_profiles').upsert(payload, { onConflict: 'id' });
+    }
+    return payload;
   },
 
   async upsertSettings(userId: string, settings: UserSettings) {
-    // Also update profiles table with name and day_end_time
-    await supabase.from('profiles').upsert({
+    // Let's just update the specific fields in profile instead of upserting a minimal profile which might overwrite things
+    const profilePayload = {
       id: userId,
       name: settings.name,
-      day_end_time: settings.dayEndTime,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'id' });
+    };
+    
+    await supabase.from('profiles').update(profilePayload).eq('id', userId);
+    await supabase.from('user_profiles').update(profilePayload).eq('id', userId);
 
-    const { data, error } = await supabase.from('user_settings').upsert({
+    const payload = {
       user_id: userId,
       name: settings.name,
       day_end_time: settings.dayEndTime,
@@ -300,9 +344,15 @@ export const supabaseService = {
       initial_expenses: settings.initialExpenses,
       currency: settings.currency,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' }).select().single();
-    if (error) throw error;
-    return data;
+    };
+
+    const { error } = await supabase.from('user_settings').upsert(payload, { onConflict: 'user_id' });
+    if (error) {
+      // If user_id conflict fails, try id
+      const backupPayload = { ...payload, id: userId };
+      delete backupPayload.user_id;
+      await supabase.from('user_settings').upsert(backupPayload, { onConflict: 'id' });
+    }
   },
 
   async createSavedSchedule(userId: string, item: SavedSchedule) {

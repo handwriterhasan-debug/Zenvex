@@ -169,7 +169,7 @@ export default function Layout() {
       <aside className="hidden md:flex w-64 bg-surface border-r border-border-dim flex-col z-10 relative">
         <div className="p-6 pb-2">
           <NavLink to="/dashboard" className="text-xl font-bold font-display tracking-tight flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <span className="w-3 h-3 rounded-full bg-[#ff2a2a] shadow-[0_0_10px_rgba(255,42,42,0.8)]"></span>
+            <span className="w-3 h-3 rounded-full bg-accent-primary shadow-[0_0_10px_var(--accent-primary)]"></span>
             Zenvex
           </NavLink>
         </div>
@@ -189,7 +189,7 @@ export default function Layout() {
             </div>
             <h3 className="font-display font-bold text-lg">{userSettings?.name || 'User'}</h3>
             <div className="flex items-center gap-2 mb-4">
-              <p className="text-xs text-[#ff2a2a] font-medium uppercase tracking-wider">{userProfile?.plan || 'Free'} Plan</p>
+              <p className="text-xs text-accent-primary font-medium uppercase tracking-wider">{userProfile?.plan || 'Free'} Plan</p>
               {localStorage.getItem('isGuestMode') === 'true' && (
                 <span className="text-[10px] bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold border border-orange-500/20">
                   Guest
@@ -321,247 +321,52 @@ export default function Layout() {
         </nav>
       </aside>
 
-      {/* Mobile Sidebar Overlay */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-md z-40"
-            />
-            <motion.aside 
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="md:hidden fixed inset-y-0 left-0 w-64 bg-surface border-r border-border-dim flex flex-col z-50 shadow-lg"
-            >
-              <div className="p-6 pb-2 flex items-center justify-between">
-                <NavLink to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="text-xl font-bold font-display tracking-tight flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <span className="w-3 h-3 rounded-full bg-[#ff2a2a] shadow-[0_0_10px_rgba(255,42,42,0.8)]"></span>
-                  Zenvex
-                </NavLink>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400 hover:text-white bg-white/5 p-2 rounded-full">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              
-              {/* Profile Card at Top (Mobile) */}
-              <div className="p-6 pt-4">
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#ff2a2a] to-orange-500 flex items-center justify-center font-bold text-2xl overflow-hidden mb-3 border-2 border-white/10 shadow-[0_0_15px_rgba(255,42,42,0.2)]">
-                    {userProfile?.avatarUrl ? (
-                      <img src={userProfile.avatarUrl} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      userSettings?.name ? userSettings.name.charAt(0).toUpperCase() : 'U'
-                    )}
-                  </div>
-                  <h3 className="font-display font-bold text-lg">{userSettings?.name || 'User'}</h3>
-                  <div className="flex items-center gap-2 mb-4">
-                    <p className="text-xs text-[#ff2a2a] font-medium uppercase tracking-wider">{userProfile?.plan || 'Free'} Plan</p>
-                    {localStorage.getItem('isGuestMode') === 'true' && (
-                      <span className="text-[10px] bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold border border-orange-500/20">
-                        Guest
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex w-full justify-between px-2 text-center mb-4">
-                    <div>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Tasks</p>
-                      <p className="font-mono font-bold text-sm">{(currentDayData?.schedule || []).length}</p>
-                    </div>
-                    <div className="w-px bg-white/10"></div>
-                    <div>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Habits</p>
-                      <p className="font-mono font-bold text-sm">{(currentDayData?.habits || []).length}</p>
-                    </div>
-                    <div className="w-px bg-white/10"></div>
-                    <div>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">Streak</p>
-                      <p className="font-mono font-bold text-sm">{(currentDayData?.habits || []).reduce((acc, h) => acc + h.streak, 0)}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col gap-2 w-full">
-                    {localStorage.getItem('isGuestMode') === 'true' && (
-                      <button
-                        onClick={async () => {
-                          try { await supabase.auth.signOut(); } catch (e) {}
-                          localStorage.removeItem('isGuestMode');
-                          navigate('/');
-                        }}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/5 text-xs uppercase tracking-wider"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        Exit App
-                      </button>
-                    )}
-                    <button
-                      onClick={handleSignOut}
-                      className="flex items-center justify-center gap-2 w-full py-2 bg-accent-primary-dim hover:bg-accent-primary-border text-accent-primary rounded-xl font-medium transition-colors border border-accent-primary-dim text-xs uppercase tracking-wider"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      Log Out
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <nav 
-                className="flex-1 px-4 space-y-1 overflow-y-auto mt-2 custom-scrollbar"
-                onMouseDown={(e) => {
-                  const slider = e.currentTarget;
-                  slider.dataset.isDown = 'true';
-                  slider.dataset.startY = (e.pageY - slider.offsetTop).toString();
-                  slider.dataset.scrollTop = slider.scrollTop.toString();
-                  slider.style.cursor = 'grabbing';
-                }}
-                onMouseLeave={(e) => {
-                  const slider = e.currentTarget;
-                  slider.dataset.isDown = 'false';
-                  slider.style.cursor = 'auto';
-                }}
-                onMouseUp={(e) => {
-                  const slider = e.currentTarget;
-                  slider.dataset.isDown = 'false';
-                  slider.style.cursor = 'auto';
-                }}
-                onMouseMove={(e) => {
-                  const slider = e.currentTarget;
-                  if (slider.dataset.isDown !== 'true') return;
-                  e.preventDefault();
-                  const startY = parseFloat(slider.dataset.startY || '0');
-                  const scrollTop = parseFloat(slider.dataset.scrollTop || '0');
-                  const y = e.pageY - slider.offsetTop;
-                  const walk = (y - startY) * 1.5;
-                  slider.scrollTop = scrollTop - walk;
-                }}
-              >
-                {navItems.map((item) => {
-                  const isLocked = userProfile?.plan === 'Free' && (item.name === 'Analytics' || item.name === 'Currency');
-                  return (
-                    <NavLink
-                      key={item.name}
-                      to={item.path}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={({ isActive }) => cn(
-                        "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                        isActive 
-                          ? "bg-white/10 text-white border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.2)]" 
-                          : "text-gray-400 hover:text-white hover:bg-white/5"
-                      )}
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <div className="flex items-center gap-3">
-                            <item.icon className={cn("w-4 h-4", isActive ? "text-[#ff2a2a]" : "")} />
-                            {item.name}
-                          </div>
-                          {isLocked && <Lock className="w-3.5 h-3.5 text-amber-500/70" />}
-                        </>
-                      )}
-                    </NavLink>
-                  );
-                })}
-
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    window.dispatchEvent(new CustomEvent('open-ai-chatbot'));
-                  }}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-gray-400 hover:text-white hover:bg-white/5 mt-2"
-                >
-                  <Sparkles className="w-4 h-4 text-[#ff2a2a]" />
-                  AI Assistant
-                </button>
-
-                {isAdmin && (
-                  <NavLink
-                    to="/admin/complaints"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={({ isActive }) => cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 mt-4 border border-orange-500/20",
-                      isActive 
-                        ? "bg-orange-500/20 text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.1)]" 
-                        : "text-orange-500/70 hover:text-orange-400 hover:bg-orange-500/10"
-                    )}
-                  >
-                    <MessageSquareWarning className="w-4 h-4" />
-                    Admin Complaints
-                  </NavLink>
-                )}
-
-                <div className="mt-4 pt-4 border-t border-white/10 mb-6">
-                  <div className="flex items-center gap-2 px-3 mb-3">
-                    <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white rounded-md shadow-sm">
-                      Beta
-                    </span>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      setIsComplainBoxOpen(true);
-                    }}
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-sm font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-xl transition-colors"
-                  >
-                    <MessageSquareWarning className="w-4 h-4" />
-                    Complain Box
-                  </button>
-                </div>
-              </nav>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         {/* Top Header */}
-        <header className="h-16 border-b border-border-dim bg-surface flex items-center justify-between px-4 md:px-8 sticky top-0 z-50 shadow-sm">
-          <div className="flex items-center gap-3">
+        <header className="h-[52px] md:h-16 border-b border-border-dim bg-surface flex items-center justify-between px-2 sm:px-3 md:px-8 sticky top-0 z-50 shadow-sm">
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5 -ml-2"
+              className="md:hidden p-1.5 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5 shrink-0"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="md:hidden flex items-center">
-              <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-blue-600 text-white rounded-sm shadow-sm">
-                Beta
-              </span>
-            </div>
-            <NavLink to="/" className="hidden sm:inline-flex items-center gap-2 text-xs font-medium text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-              Home
+            <NavLink to="/dashboard" className="inline-flex items-center justify-center gap-1.5 font-display font-bold text-lg tracking-tight text-white transition-opacity hover:opacity-80 px-1 shrink-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-accent-primary shadow-[0_0_8px_var(--accent-primary)]"></span>
+              <span className="hidden sm:inline">Zenvex</span>
             </NavLink>
-          </div>
-          <div className="flex items-center gap-2 md:gap-4">
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white rounded-md shadow-sm">
+            <div className="flex items-center shrink-0">
+              <span className="px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white rounded-md shadow-sm">
                 Beta
               </span>
             </div>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button 
               onClick={() => setIsComplainBoxOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg transition-colors"
+              className="flex items-center justify-center gap-1.5 w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 text-xs font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg sm:rounded-lg transition-colors shrink-0"
               title="Report an Issue"
             >
-              <MessageSquareWarning className="w-3.5 h-3.5" />
-              Complain Box
+              <MessageSquareWarning className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              <span className="hidden sm:inline">Complain Box</span>
             </button>
-            <div className="hidden sm:block text-xs font-mono text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+            <div className="hidden sm:block text-xs font-mono text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 shrink-0">
               {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </div>
             <button 
+              onClick={toggleTheme}
+              className="p-1.5 md:p-2 transition-colors rounded-full hover:bg-white/5 text-gray-400 hover:text-white shrink-0"
+              title="Toggle Theme"
+            >
+              {userSettings.theme === 'light' ? <Moon className="w-4 h-4 md:w-5 md:h-5" /> : <Sun className="w-4 h-4 md:w-5 md:h-5" />}
+            </button>
+            <button 
               onClick={() => setShowTimer(!showTimer)}
-              className={`p-2 transition-colors rounded-full hover:bg-white/5 ${showTimer || isTimerRunning ? 'text-[#ff2a2a]' : 'text-gray-400 hover:text-white'}`}
+              className={`p-1.5 md:p-2 transition-colors rounded-full hover:bg-white/5 shrink-0 ${showTimer || isTimerRunning ? 'text-accent-primary' : 'text-gray-400 hover:text-white'}`}
               title="Focus Timer"
             >
-              <Timer className="w-4 h-4" />
+              <Timer className="w-4 h-4 md:w-5 md:h-5" />
             </button>
 
             <NotificationPanel />
@@ -588,7 +393,7 @@ export default function Layout() {
               className="absolute top-20 right-4 left-4 md:left-auto md:right-8 z-50 bg-surface p-6 border border-border-dim md:w-72 shadow-lg rounded-3xl"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold font-display text-[#ff2a2a] flex items-center gap-2">
+                <h3 className="font-bold font-display text-accent-primary flex items-center gap-2">
                   <Timer className="w-4 h-4" /> Focus Time
                 </h3>
                 <button onClick={() => setShowTimer(false)} className="text-gray-500 hover:text-white">
@@ -606,7 +411,7 @@ export default function Layout() {
               <div className="flex items-center justify-center gap-4">
                 <button 
                   onClick={() => setIsTimerRunning(!isTimerRunning)}
-                  className="w-12 h-12 rounded-full bg-[#ff2a2a] hover:bg-[#ff4d4d] text-[#ffffff] flex items-center justify-center transition-all neon-glow"
+                  className="w-12 h-12 rounded-full bg-accent-primary hover:bg-accent-primary-hover text-[#000000] flex items-center justify-center transition-all neon-glow"
                 >
                   {isTimerRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-1" />}
                 </button>
@@ -686,14 +491,14 @@ export default function Layout() {
         </div>
         
         {/* Mobile Bottom Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-xl border-t border-border-dim pb-safe">
-          <div className="flex items-center justify-between px-1 py-1 w-full max-w-full overflow-hidden">
-            {navItems.slice(0, 6).map((item) => (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-xl border-t border-border-dim pb-safe min-h-[64px] flex items-center">
+          <div className="flex items-center justify-between w-full h-full max-w-full overflow-hidden">
+            {navItems.slice(0, 5).map((item) => (
               <NavLink
                 key={item.name}
                 to={item.path}
                 className={({ isActive }) => cn(
-                  "relative flex flex-col items-center justify-center p-1 rounded-xl text-[9px] sm:text-[10px] font-medium transition-all duration-300 flex-1 min-h-[44px] max-w-[16.66%]",
+                  "relative flex flex-col items-center justify-center px-[4px] py-2 rounded-xl text-[10px] font-medium transition-all duration-300 flex-1 h-full min-h-[56px] max-w-[20%]",
                   isActive 
                     ? "text-white" 
                     : "text-gray-500 hover:text-gray-300"
@@ -709,7 +514,7 @@ export default function Layout() {
                       />
                     )}
                     <item.icon className={cn("w-5 h-5 mb-0.5 z-10 transition-transform duration-300 max-w-[24px] max-h-[24px] shrink-0", isActive ? "scale-110 text-accent-primary drop-shadow-[0_0_8px_rgba(var(--accent-primary),0.5)]" : "")} />
-                    <span className={cn("z-10 tracking-wide transition-all duration-300 truncate w-full text-center px-0.5", isActive ? "opacity-100" : "opacity-70")}>{item.name}</span>
+                    <span className={cn("z-10 tracking-wide transition-all duration-300 truncate w-full text-center", isActive ? "opacity-100" : "opacity-70")} style={{ fontSize: '10px' }}>{item.name}</span>
                   </>
                 )}
               </NavLink>
@@ -765,7 +570,7 @@ export default function Layout() {
                       />
                       <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="text-sm text-[#ff2a2a] hover:text-[#ff4d4d] font-medium"
+                        className="text-sm text-accent-primary hover:text-accent-primary-hover font-medium"
                       >
                         Upload Picture
                       </button>
@@ -778,7 +583,7 @@ export default function Layout() {
                         placeholder="Your Name"
                         value={onboardingName}
                         onChange={(e) => setOnboardingName(e.target.value)}
-                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#ff2a2a] transition-colors"
+                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent-primary transition-colors"
                       />
                     </div>
                   </div>
@@ -792,7 +597,7 @@ export default function Layout() {
                     </button>
                     <button
                       onClick={handleSaveOnboarding}
-                      className="flex-1 py-3 px-4 bg-[#ff2a2a] hover:bg-[#ff4d4d] text-[#ffffff] rounded-xl font-medium transition-colors neon-glow"
+                      className="flex-1 py-3 px-4 bg-accent-primary hover:bg-accent-primary-hover text-[#000000] rounded-xl font-medium transition-colors neon-glow"
                     >
                       Save Profile
                     </button>

@@ -21,13 +21,15 @@ export default function Subscription() {
     const code = couponCode.trim().toLowerCase();
 
     if (code === '1856hk') {
-      setAppliedCoupon(null);
-      setCouponMessage({ text: 'Code is correct, but Pro plan is currently in building process.', type: 'error' });
-    } else if (code === 'leftrciks' || code === 'access') {
+      setAppliedCoupon(code);
+      applySubscription('Pro', 90, code);
+      setCouponMessage({ text: 'Coupon applied! 3 Months Pro plan unlocked.', type: 'success' });
+      showToast('Success! 3 Months Pro plan unlocked.');
+    } else if (code === 'leftricks' || code === 'access') {
       setAppliedCoupon(code);
       applySubscription('Pro', 9999, code);
-      setCouponMessage({ text: 'Admin access granted: Pro plan unlocked.', type: 'success' });
-      showToast('Success! Pro plan unlocked.');
+      setCouponMessage({ text: 'Admin access granted: Lifetime Pro plan unlocked.', type: 'success' });
+      showToast('Success! Lifetime Pro plan unlocked.');
     } else {
       setAppliedCoupon(null);
       setCouponMessage({ text: 'Invalid coupon code.', type: 'error' });

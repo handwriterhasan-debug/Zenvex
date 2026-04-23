@@ -31,8 +31,10 @@ export default function ProtectedRoute() {
         } else {
           setIsAuthenticated(false);
         }
-      } catch (error) {
-        console.error('Auth check failed:', error);
+      } catch (error: any) {
+        if (error.message !== 'Supabase getSession timeout') {
+          console.error('Auth check failed:', error);
+        }
         
         // Fallback to guest mode check even if Supabase fails/times out
         try {

@@ -37,7 +37,7 @@ export default function Analytics() {
   }
   
   // Combine history and current day for analytics
-  const allData = [...history, currentDayData];
+  const allData = [...history.filter(h => h.date !== currentDayData.date), currentDayData];
 
   // Filter data based on selected time range
   const now = new Date();
@@ -50,15 +50,16 @@ export default function Analytics() {
     return isAfter(dayDate, subYears(now, 1));
   });
 
-  // Calculate productivity data for the chart
+  // Calculate productivity data for the chart (Consistency Graph)
+  let cumulativeScore = 0;
   let productivityData = filteredData.map(day => {
     const totalTasks = (day.schedule || []).length;
-    const completedTasks = (day.schedule || []).filter(s => s.status === 'completed').length;
-    const totalHabits = (day.habits || []).length;
-    const completedHabits = (day.habits || []).filter(h => h.completedToday).length;
+    const completedTasks = (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length;
+    const missedTasks = totalTasks - completedTasks;
     
-    const taskScore = totalTasks > 0 ? (completedTasks / totalTasks) * 50 : 0;
-    const habitScore = totalHabits > 0 ? (completedHabits / totalHabits) * 50 : 0;
+    cumulativeScore += completedTasks;
+    cumulativeScore -= missedTasks;
+    if (cumulativeScore < 0) cumulativeScore = 0;
     
     const dateObj = new Date(day.date);
     const label = (timeRange === 'week' || timeRange === 'today')
@@ -67,7 +68,7 @@ export default function Analytics() {
     
     return {
       name: label,
-      score: Math.round(taskScore + habitScore)
+      score: cumulativeScore
     };
   });
 
@@ -95,7 +96,7 @@ export default function Analytics() {
 
   filteredData.forEach(day => {
     (day.schedule || []).forEach(s => {
-      if (s.status === 'completed') {
+      if (s.status === 'completed' || s.status === 'incomplete') {
         const hours = s.actualHours !== undefined ? Number(s.actualHours) : calculateHoursHelper(s.timeStart, s.timeEnd);
         categoryTime[s.category] = (categoryTime[s.category] || 0) + hours;
         totalTime += hours;
@@ -103,15 +104,28 @@ export default function Analytics() {
     });
   });
 
-  const colors = ['#e11d48', '#f43f5e', '#fb7185', '#fda4af', '#9f1239', '#be123c'];
-  const timeUsageData = Object.entries(categoryTime).map(([name, value], index) => ({
-    name,
-    value: Math.round((value / totalTime) * 100) || 0,
-    color: colors[index % colors.length]
-  })).sort((a, b) => b.value - a.value);
+  const timeUsageData = Object.entries(categoryTime).map(([name, value]) => {
+    const specificColors: Record<string, string> = {
+      'Work': '#22c55e', // Green
+      'Fitness': '#22c55e', // Green
+      'Social': '#eab308', // Yellow
+      'Rest': '#9ca3af', // Grey
+      'Research': '#22c55e', // Green
+      'Religious': '#22c55e', // Green
+      'Spiritual': '#06b6d4', // Cyan
+      'Hanging out': '#ec4899', // Pink
+      'Games': '#eab308', // Yellow
+      'Reading': '#22c55e', // Green
+    };
+    return {
+      name,
+      value: Number(value.toFixed(1)),
+      color: specificColors[name] || '#22c55e'
+    };
+  }).sort((a, b) => b.value - a.value);
 
   if (timeUsageData.length === 0) {
-    timeUsageData.push({ name: 'No Data', value: 100, color: '#333' });
+    timeUsageData.push({ name: 'No Data', value: 0, color: '#333' });
   }
 
   // Calculate monthly improvement
@@ -121,7 +135,7 @@ export default function Analytics() {
     const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
     
     const totalTasks = (day.schedule || []).length;
-    const completedTasks = (day.schedule || []).filter(s => s.status === 'completed').length;
+    const completedTasks = (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length;
     const totalHabits = (day.habits || []).length;
     const completedHabits = (day.habits || []).filter(h => h.completedToday).length;
     
@@ -157,7 +171,7 @@ export default function Analytics() {
   }
 
   // Overall stats
-  const totalTasksCompleted = filteredData.reduce((acc, day) => acc + (day.schedule || []).filter(s => s.status === 'completed').length, 0);
+  const totalTasksCompleted = filteredData.reduce((acc, day) => acc + (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length, 0);
   const calculateHours = (start: string, end: string) => {
     if (!start || !end) return 0;
     
@@ -177,7 +191,7 @@ export default function Analytics() {
   };
 
   const totalWorkHours = filteredData.reduce((acc, day) => {
-    return acc + (day.schedule || []).filter(s => s.status === 'completed').reduce((sum, curr) => {
+    return acc + (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').reduce((sum, curr) => {
       if (curr.actualHours !== undefined) {
         return sum + Number(curr.actualHours);
       }
@@ -185,14 +199,15 @@ export default function Analytics() {
     }, 0);
   }, 0);
   
-  const currentDisciplineScore = productivityData.length > 0 ? 
+  const rawScore = productivityData.length > 0 ? 
     Math.round(productivityData.reduce((acc, curr) => acc + curr.score, 0) / productivityData.length) : 0;
+  const currentDisciplineScore = Math.max(0, rawScore);
 
   // Calculate category balance for Radar Chart
   const categoryBalance: Record<string, number> = {};
   filteredData.forEach(day => {
     (day.schedule || []).forEach(s => {
-      if (s.status === 'completed') {
+      if (s.status === 'completed' || s.status === 'incomplete') {
         categoryBalance[s.category] = (categoryBalance[s.category] || 0) + 1;
       }
     });
@@ -299,11 +314,13 @@ export default function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
-        {/* Daily Productivity Area Chart */}
-        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
+        {/* Daily Consistency Area Chart */}
+        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:border-accent-primary-border transition-all duration-500">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-accent-primary-dim rounded-full blur-[100px] opacity-20 group-hover:opacity-30 transition-opacity duration-700 pointer-events-none"></div>
+          
+          <div className="flex items-center justify-between mb-8 relative z-10">
             <h2 className="text-lg font-bold font-display tracking-tight text-text-main">
-              Productivity Trend
+              Consistency Graph
             </h2>
             <div className="p-2 rounded-lg bg-accent-primary-dim text-accent-primary">
               <TrendingUp className="w-4 h-4" />
@@ -320,7 +337,7 @@ export default function Analytics() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" vertical={false} />
                 <XAxis dataKey="name" stroke="#666" tick={{fill: '#666', fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
-                <YAxis stroke="#666" tick={{fill: '#666', fontSize: 12}} axisLine={false} tickLine={false} domain={[0, 100]} dx={-10} />
+                <YAxis stroke="#666" tick={{fill: '#666', fontSize: 12}} axisLine={false} tickLine={false} domain={['auto', 'auto']} dx={-10} />
                 <Tooltip 
                   contentStyle={{backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', color: '#fff', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.5)'}}
                   itemStyle={{color: '#fff'}}
@@ -332,55 +349,71 @@ export default function Analytics() {
         </div>
 
         {/* Time Usage Pie Chart */}
-        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-lg font-bold font-display tracking-tight text-text-main">
+        <div className="bg-surface border border-border-dim rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden group hover:border-accent-primary-border transition-all duration-500">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-accent-primary-dim rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none"></div>
+          
+          <div className="flex items-center justify-between mb-8 relative z-10">
+            <h2 className="text-xl font-bold font-display tracking-tight text-white">
               Time Distribution
             </h2>
-            <div className="p-2 rounded-lg bg-accent-primary-dim text-accent-primary">
-              <Clock className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-accent-primary-dim text-accent-primary shadow-inner border border-accent-primary-border">
+              <Clock className="w-5 h-5" />
             </div>
           </div>
-          <div className="flex flex-col md:flex-row items-center justify-center gap-8 h-auto md:h-64">
-            <div className="w-48 h-48 relative flex items-center justify-center">
+          <div className="flex flex-col xl:flex-row items-center justify-center gap-10 h-auto xl:h-[280px]">
+            <div className="w-[220px] h-[220px] relative flex items-center justify-center shrink-0">
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                <span className="text-2xl font-bold font-display text-white">
-                  {timeUsageData.reduce((a, b) => a + b.value, 0).toFixed(0)}%
+                <span className="text-3xl font-bold font-display text-white drop-shadow-md">
+                  {timeUsageData.reduce((a, b) => a + b.value, 0).toFixed(1).replace(/\.0$/, '')}h
                 </span>
-                <span className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Total</span>
+                <span className="text-[10px] text-gray-400 uppercase tracking-[0.2em] mt-2 font-bold">Total</span>
               </div>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
+                  <defs>
+                    <filter id="analyticsPieGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="6" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
                   <Pie
                     data={timeUsageData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
+                    innerRadius={70}
+                    outerRadius={95}
                     paddingAngle={5}
                     dataKey="value"
                     stroke="none"
+                    cornerRadius={8}
+                    animationBegin={0}
+                    animationDuration={1500}
+                    animationEasing="ease-out"
                   >
-                    {timeUsageData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
+                    {timeUsageData.map((entry, index) => {
+                      const scheme = ['#39ff14', '#1f8c0a', '#a3ff94', '#d1d1d1', '#7a7a7a', '#444444', '#111111'];
+                      // Override entry's initial random assignment to use new scheme
+                      entry.color = scheme[index % scheme.length];
+                      return <Cell key={`cell-${index}`} fill={entry.color} filter="url(#analyticsPieGlow)" />;
+                    })}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-dim)', borderRadius: '12px', color: 'var(--text-main)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}
-                    itemStyle={{color: 'var(--text-main)'}}
+                    contentStyle={{ backgroundColor: 'rgba(10, 10, 10, 0.9)', backdropFilter: 'blur(10px)', border: '1px solid var(--border-strong)', borderRadius: '16px', color: '#fff', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
+                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                    formatter={(value: number) => [`${value.toFixed(1).replace(/\.0$/, '')}h`, 'Time']}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             
-            <div className="space-y-3 w-full md:w-auto">
-              {timeUsageData.slice(0, 4).map((item, i) => (
-                <div key={i} className="flex items-center justify-between gap-4 p-2 rounded-xl hover:bg-surface-hover transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full" style={{backgroundColor: item.color}}></div>
-                    <span className="text-sm text-text-muted">{item.name}</span>
+            <div className="space-y-3 w-full xl:w-auto flex-1 max-w-sm">
+              {timeUsageData.slice(0, 5).map((item, i) => (
+                <div key={i} className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-surface-hover border border-border-dim hover:border-accent-primary-border hover:bg-accent-primary-dim transition-all duration-300 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-3.5 h-3.5 rounded-full shadow-md" style={{ backgroundColor: item.color, boxShadow: `0 0 10px ${item.color}66` }}></div>
+                    <span className="text-[15px] font-semibold text-white tracking-wide">{item.name}</span>
                   </div>
-                  <span className="text-sm font-medium text-text-main">{item.value}%</span>
+                  <span className="text-sm font-mono font-medium text-white bg-black/60 border border-white/10 px-3 py-1 rounded-lg">{item.value.toFixed(1).replace(/\.0$/, '')}h</span>
                 </div>
               ))}
             </div>
@@ -388,25 +421,27 @@ export default function Analytics() {
         </div>
 
         {/* Category Balance Radar Chart */}
-        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
+        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:border-accent-primary-border transition-all duration-500">
+          <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none"></div>
+          
+          <div className="flex items-center justify-between mb-8 relative z-10">
             <h2 className="text-lg font-bold font-display tracking-tight text-text-main">
               Life Balance
             </h2>
-            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-inner">
               <Target className="w-4 h-4" />
             </div>
           </div>
-          <div className="h-64">
+          <div className="h-64 relative z-10">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                <PolarGrid stroke="var(--border-strong)" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
+                <PolarGrid stroke="#ffffff15" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: '#a3a3a3', fontSize: 12, fontWeight: 500 }} />
                 <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
-                <Radar name="Completed" dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.5} />
+                <Radar name="Completed" dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
                 <Tooltip 
-                  contentStyle={{backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-dim)', borderRadius: '12px', color: 'var(--text-main)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}
-                  itemStyle={{color: 'var(--text-main)'}}
+                  contentStyle={{backgroundColor: 'rgba(10, 10, 10, 0.9)', backdropFilter: 'blur(10px)', borderColor: '#ffffff1a', borderRadius: '12px', color: '#fff', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.5)'}}
+                  itemStyle={{color: '#fff', fontWeight: 'bold'}}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -414,14 +449,16 @@ export default function Analytics() {
         </div>
 
         {/* Monthly Improvement Line Graph */}
-        <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 shadow-2xl">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-lg font-bold font-display tracking-tight">Monthly Progress</h2>
-            <div className="p-2 rounded-lg bg-orange-500/10 text-orange-400">
+        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:border-accent-primary-border transition-all duration-500">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/20 rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none"></div>
+          
+          <div className="flex items-center justify-between mb-8 relative z-10">
+            <h2 className="text-lg font-bold font-display tracking-tight text-text-main">Monthly Progress</h2>
+            <div className="p-2 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20 shadow-inner">
               <Target className="w-4 h-4" />
             </div>
           </div>
-          <div className="h-72">
+          <div className="h-72 relative z-10">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthlyImprovementData}>
                 <defs>

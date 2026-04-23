@@ -31,7 +31,7 @@ export default function Dashboard() {
   };
 
   // Combine history and current day for filtering
-  const allData = [...history, currentDayData];
+  const allData = [...history.filter(h => h.date !== currentDayData.date), currentDayData];
 
   const getFilteredData = () => {
     const currentDate = new Date(currentDayData.date);
@@ -78,11 +78,13 @@ export default function Dashboard() {
   let completedHabits = 0;
   let totalHabits = 0;
   let totalExpenses = 0;
+  let totalPlannedHours = 0;
+  let totalCompletedHours = 0;
   let hasValidExcuse = false;
   const hoursByCategory: Record<string, number> = {};
 
   filteredData.forEach(day => {
-    completedTasks += (day.schedule || []).filter(s => s.status === 'completed').length;
+    completedTasks += (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length;
     totalTasks += (day.schedule || []).length;
     completedHabits += (day.habits || []).filter(h => h.completedToday).length;
     totalHabits += (day.habits || []).length;
@@ -91,10 +93,16 @@ export default function Dashboard() {
       hasValidExcuse = true;
     }
 
-    (day.schedule || []).filter(s => s.status === 'completed').forEach(curr => {
-      const hours = curr.actualHours !== undefined ? Number(curr.actualHours) : calculateHours(curr.timeStart, curr.timeEnd);
-      const cat = curr.category || 'Uncategorized';
-      hoursByCategory[cat] = (hoursByCategory[cat] || 0) + hours;
+    (day.schedule || []).forEach(curr => {
+      const plannedHours = calculateHours(curr.timeStart, curr.timeEnd);
+      totalPlannedHours += plannedHours;
+      
+      if (curr.status === 'completed' || curr.status === 'incomplete') {
+        const hours = curr.actualHours !== undefined ? Number(curr.actualHours) : plannedHours;
+        totalCompletedHours += hours;
+        const cat = curr.category || 'Uncategorized';
+        hoursByCategory[cat] = (hoursByCategory[cat] || 0) + hours;
+      }
     });
 
     totalExpenses += (day.expenses || [])
@@ -108,11 +116,11 @@ export default function Dashboard() {
   let taskScore = 0;
   let habitScore = 0;
   
-  if (totalTasks > 0 && totalHabits > 0) {
-    taskScore = (completedTasks / totalTasks) * 50;
+  if (totalPlannedHours > 0 && totalHabits > 0) {
+    taskScore = (totalCompletedHours / totalPlannedHours) * 50;
     habitScore = (completedHabits / totalHabits) * 50;
-  } else if (totalTasks > 0) {
-    taskScore = (completedTasks / totalTasks) * 100;
+  } else if (totalPlannedHours > 0) {
+    taskScore = (totalCompletedHours / totalPlannedHours) * 100;
   } else if (totalHabits > 0) {
     habitScore = (completedHabits / totalHabits) * 100;
   } else {
@@ -120,10 +128,10 @@ export default function Dashboard() {
   }
   
   if (hasValidExcuse) {
-    if (totalTasks > 0 && totalHabits > 0) {
+    if (totalPlannedHours > 0 && totalHabits > 0) {
       taskScore = Math.max(taskScore, 40);
       habitScore = Math.max(habitScore, 40);
-    } else if (totalTasks > 0) {
+    } else if (totalPlannedHours > 0) {
       taskScore = Math.max(taskScore, 80);
     } else if (totalHabits > 0) {
       habitScore = Math.max(habitScore, 80);
@@ -147,7 +155,7 @@ export default function Dashboard() {
     }
 
     let chartData = dataToUse.map((day, index) => {
-      const dTasks = (day.schedule || []).filter(s => s.status === 'completed').length;
+      const dTasks = (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length;
       const dTotalTasks = (day.schedule || []).length;
       const dHabits = (day.habits || []).filter(h => h.completedToday).length;
       const dTotalHabits = (day.habits || []).length;
@@ -178,7 +186,7 @@ export default function Dashboard() {
       }
 
       let dHours = 0;
-      (day.schedule || []).filter(s => s.status === 'completed' && s.category === 'Work').forEach(curr => {
+      (day.schedule || []).filter(s => (s.status === 'completed' || s.status === 'incomplete') && s.category === 'Work').forEach(curr => {
         dHours += curr.actualHours !== undefined ? Number(curr.actualHours) : calculateHours(curr.timeStart, curr.timeEnd);
       });
 
@@ -244,7 +252,7 @@ export default function Dashboard() {
       )}
 
       {/* Hero / Lobby Section */}
-      <div className="relative rounded-3xl overflow-hidden bg-surface border border-border-dim shadow-sm mb-4 md:mb-8">
+      <div className="relative rounded-3xl overflow-visible bg-surface border border-border-dim shadow-sm mb-4 md:mb-8">
         <div className="relative z-10 p-4 sm:p-6 md:p-12 lg:p-16 flex flex-col lg:flex-row items-center justify-between gap-4 md:gap-8">
           <div className="max-w-2xl text-center lg:text-left w-full">
             <motion.div 
@@ -293,74 +301,97 @@ export default function Dashboard() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3, duration: 0.5 }}
-            className="flex flex-row lg:flex-col gap-4 md:gap-4 relative shrink-0 w-full md:w-auto items-center justify-center md:items-start mt-2 md:mt-0"
+            style={{ overflow: 'visible', border: 'none', outline: 'none' }}
+            className="flex flex-row lg:flex-col gap-[12px] relative shrink-0 w-full md:w-auto items-center justify-center lg:items-start mt-2 lg:mt-0"
           >
-            <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 lg:w-64 lg:h-64 relative flex items-center justify-center mx-auto md:mx-0 shrink-0">
-              <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-                <circle 
-                  cx="50" cy="50" r="45" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="8" 
-                  className="text-surface-hover"
-                />
+            <div className="discipline-wrapper border-none outline-none w-[160px] h-[160px] md:w-48 md:h-48 lg:w-64 lg:h-64 mx-0 shrink-0 relative overflow-visible rounded-full">
+              <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100" style={{ overflow: 'visible', border: 'none', outline: 'none' }}>
+                <defs>
+                  <filter id="neon-glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="blur1" />
+                    <feGaussianBlur stdDeviation="8" result="blur2" />
+                    <feComponentTransfer in="blur2" result="dimBlur2">
+                      <feFuncA type="linear" slope="0.4" />
+                    </feComponentTransfer>
+                    <feComponentTransfer in="blur1" result="dimBlur1">
+                      <feFuncA type="linear" slope="0.6" />
+                    </feComponentTransfer>
+                    <feMerge>
+                      <feMergeNode in="dimBlur2" />
+                      <feMergeNode in="dimBlur1" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
                 <motion.circle 
                   cx="50" cy="50" r="45" 
                   fill="none" 
                   stroke="currentColor" 
                   strokeWidth="8" 
                   strokeLinecap="round"
-                  className="text-accent-primary drop-shadow-[0_0_8px_rgba(225,29,72,0.5)]"
+                  className="text-accent-primary"
+                  filter="url(#neon-glow)"
                   initial={{ strokeDasharray: "0 283" }}
                   animate={{ strokeDasharray: `${(disciplineScore / 100) * 283} 283` }}
                   transition={{ duration: 1.5, ease: "easeOut" }}
                 />
               </svg>
-              <div className="text-center z-10">
-                <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-text-main tracking-tight drop-shadow-md">{disciplineScore}%</div>
-                <div className="text-[8px] md:text-[10px] lg:text-xs text-text-muted uppercase tracking-widest mt-0.5 md:mt-1 font-bold">Discipline</div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 border-none outline-none">
+                <div className="text-[20px] sm:text-[20px] md:text-3xl lg:text-4xl font-bold text-text-main tracking-tight drop-shadow-md leading-none flex items-center justify-center">{disciplineScore}%</div>
+                <div className="text-[10px] md:text-[10px] lg:text-xs text-text-muted uppercase tracking-widest mt-1 font-bold leading-none flex items-center justify-center">Discipline</div>
               </div>
             </div>
             
             {/* Added Infographics */}
-            <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2 md:gap-4 w-full max-w-[140px] sm:max-w-[180px] md:max-w-none mx-auto md:mx-0">
-              <div className="bg-surface-light border border-border-dim rounded-xl md:rounded-2xl p-2 md:p-4 flex flex-col items-center justify-center shadow-sm gap-2 w-full">
-                <div className="flex items-center gap-1.5 sm:mb-1 w-full justify-between sm:justify-center">
+            <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2 md:gap-4 w-full md:max-w-none mx-auto md:mx-0">
+              <div className="bg-surface-light border border-border-dim rounded-xl md:rounded-2xl p-[12px] md:p-[16px] flex flex-col shadow-sm gap-2 w-full min-h-[80px]">
+                <div className="flex items-center gap-1.5 w-full justify-between mb-1">
                   <div className="flex items-center gap-1.5">
-                    <Activity className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" />
-                    <div className="text-[10px] text-text-muted uppercase tracking-wider sm:hidden">Habits</div>
+                    <Activity className="w-4 h-4 text-emerald-500" />
+                    <div className="text-[10px] md:text-xs text-text-muted uppercase tracking-wider font-bold">Habits</div>
                   </div>
-                  <div className="text-sm sm:text-lg md:text-xl font-bold text-text-main sm:hidden">{completedHabits}/{totalHabits}</div>
+                  <div className="text-sm md:text-base font-bold text-text-main">{completedHabits}/{totalHabits}</div>
                 </div>
-                <div className="text-sm sm:text-lg md:text-2xl font-bold text-text-main hidden sm:block">{completedHabits}/{totalHabits}</div>
-                <div className="w-full bg-surface rounded-full h-1.5 md:h-2 mt-1 overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${completedHabits <= 0 ? 0 : Math.max(2, Math.min(100, totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0))}%` }}
-                    transition={{ duration: 1, ease: "easeOut" }}
-                    className="h-full bg-emerald-500 rounded-full"
-                  />
+                
+                <div className="w-full flex-1 max-h-[160px] overflow-y-auto custom-scrollbar flex flex-col gap-1.5 mt-1 pr-1">
+                  {habits.length === 0 ? (
+                    <div className="text-gray-500 text-xs text-center py-2 italic flex-1 flex items-center justify-center">No habits yet</div>
+                  ) : (
+                    habits.map((h, i) => (
+                      <div key={i} className="flex items-center gap-2 py-0.5">
+                        <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${h.completedToday ? 'bg-emerald-500' : 'bg-gray-600'}`} />
+                        <span className="text-[11px] sm:text-xs text-text-main truncate flex-1 leading-tight">{h.name}</span>
+                        <span className="text-[9px] sm:text-[10px] text-text-muted shrink-0 bg-surface px-1.5 py-0.5 rounded border border-border-dim">{h.completedToday ? 'Done' : 'Open'}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
-                <div className="text-[8px] md:text-[10px] text-text-muted uppercase tracking-wider mt-0.5 md:mt-1 hidden sm:block">Habits</div>
               </div>
-              <div className="bg-surface-light border border-border-dim rounded-xl md:rounded-2xl p-2 md:p-4 flex flex-col items-center justify-center shadow-sm gap-2 w-full">
-                <div className="flex items-center gap-1.5 sm:mb-1 w-full justify-between sm:justify-center">
+
+              <div className="bg-surface-light border border-border-dim rounded-xl md:rounded-2xl p-[12px] md:p-[16px] flex flex-col shadow-sm gap-2 w-full min-h-[80px]">
+                <div className="flex items-center gap-1.5 w-full justify-between mb-1">
                   <div className="flex items-center gap-1.5">
-                    <Target className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
-                    <div className="text-[10px] text-text-muted uppercase tracking-wider sm:hidden">Tasks</div>
+                    <Target className="w-4 h-4 text-blue-500" />
+                    <div className="text-[10px] md:text-xs text-text-muted uppercase tracking-wider font-bold">Tasks</div>
                   </div>
-                  <div className="text-sm sm:text-lg md:text-xl font-bold text-text-main sm:hidden">{completedTasks}/{totalTasks}</div>
+                  <div className="text-sm md:text-base font-bold text-text-main">{completedTasks}/{totalTasks}</div>
                 </div>
-                <div className="text-sm sm:text-lg md:text-2xl font-bold text-text-main hidden sm:block">{completedTasks}/{totalTasks}</div>
-                <div className="w-full bg-surface rounded-full h-1.5 md:h-2 mt-1 overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${completedTasks <= 0 ? 0 : Math.max(2, Math.min(100, totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0))}%` }}
-                    transition={{ duration: 1, ease: "easeOut" }}
-                    className="h-full bg-blue-500 rounded-full"
-                  />
+                
+                <div className="w-full flex-1 max-h-[160px] overflow-y-auto custom-scrollbar flex flex-col gap-1.5 mt-1 pr-1">
+                  {(schedule || []).length === 0 ? (
+                    <div className="text-gray-500 text-xs text-center py-2 italic flex-1 flex items-center justify-center">No tasks yet</div>
+                  ) : (
+                    (schedule || []).map((t, i) => (
+                      <div key={i} className="flex items-center gap-2 py-0.5">
+                        <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-blue-500' : t.status === 'incomplete' ? 'bg-red-500' : 'bg-gray-600'}`} />
+                        <span className="text-[11px] sm:text-xs text-text-main truncate flex-1 leading-tight">{t.title}</span>
+                        <span className="text-[9px] sm:text-[10px] text-text-muted shrink-0 bg-surface px-1.5 py-0.5 rounded border border-border-dim">
+                          {t.status === 'completed' ? 'Done' : t.status === 'incomplete' ? 'Missed' : 'Open'}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
-                <div className="text-[8px] md:text-[10px] text-text-muted uppercase tracking-wider mt-0.5 md:mt-1 hidden sm:block">Tasks</div>
               </div>
             </div>
           </motion.div>
@@ -396,18 +427,18 @@ export default function Dashboard() {
           title="Discipline Score" 
           value={`${disciplineScore}%`} 
           icon={Target} 
-          accentColor="#3b82f6" // blue
+          accentColor="#39ff14"
           chart={
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={generateChartData('discipline')}>
                 <defs>
                   <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#e11d48" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#e11d48" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#39ff14" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#39ff14" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#e11d48' }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                <Area type="monotone" dataKey="value" name="Score" stroke="#e11d48" strokeWidth={2} fillOpacity={1} fill="url(#colorScore)" />
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#39ff14' }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                <Area type="monotone" dataKey="value" name="Score" stroke="#39ff14" strokeWidth={2} fillOpacity={1} fill="url(#colorScore)" />
               </AreaChart>
             </ResponsiveContainer>
           }
@@ -416,12 +447,18 @@ export default function Dashboard() {
           title="Total Tasks" 
           value={absoluteTotalTasks} 
           icon={CheckCircle} 
-          accentColor="#22c55e" // green
+          accentColor="#1f8c0a"
           chart={
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={generateChartData('tasks')}>
-                <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#f43f5e' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                <Bar dataKey="value" name="Tasks" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <defs>
+                  <linearGradient id="tasksGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#39ff14" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#1f8c0a" stopOpacity={1}/>
+                  </linearGradient>
+                </defs>
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#1f8c0a' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                <Bar dataKey="value" name="Tasks" fill="url(#tasksGradient)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           }
@@ -430,18 +467,18 @@ export default function Dashboard() {
           title="Work Hours" 
           value={`${workHours.toFixed(1).replace(/\.0$/, '')}h`} 
           icon={Clock} 
-          accentColor="#eab308" // yellow
+          accentColor="#a3ff94"
           chart={
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={generateChartData('hours')}>
                 <defs>
                   <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#fb7185" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#fb7185" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#a3ff94" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#a3ff94" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#fb7185' }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                <Area type="monotone" dataKey="value" name="Hours" stroke="#fb7185" strokeWidth={2} fillOpacity={1} fill="url(#colorHours)" />
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#a3ff94' }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                <Area type="monotone" dataKey="value" name="Hours" stroke="#a3ff94" strokeWidth={2} fillOpacity={1} fill="url(#colorHours)" />
               </AreaChart>
             </ResponsiveContainer>
           }
@@ -450,12 +487,18 @@ export default function Dashboard() {
           title="Total Habits" 
           value={absoluteTotalHabits} 
           icon={Activity} 
-          accentColor="#ef4444" // red
+          accentColor="#29b314"
           chart={
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={generateChartData('habits')}>
-                <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#fda4af' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                <Bar dataKey="value" name="Habits" fill="#fda4af" radius={[4, 4, 0, 0]} />
+                <defs>
+                  <linearGradient id="habitsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a3ff94" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#29b314" stopOpacity={1}/>
+                  </linearGradient>
+                </defs>
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#29b314' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                <Bar dataKey="value" name="Habits" fill="url(#habitsGradient)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           }
@@ -464,18 +507,18 @@ export default function Dashboard() {
           title="Total Expenses" 
           value={`${absoluteTotalExpenses} ${userSettings.currency || 'PKR'}`} 
           icon={DollarSign} 
-          accentColor="#06b6d4" // cyan
+          accentColor="#66ff4d"
           chart={
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={generateChartData('expenses')}>
                 <defs>
                   <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#fecdd3" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#fecdd3" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#66ff4d" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#66ff4d" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#fecdd3' }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                <Area type="monotone" dataKey="value" name="Amount" stroke="#fecdd3" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#66ff4d' }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                <Area type="monotone" dataKey="value" name="Amount" stroke="#66ff4d" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
               </AreaChart>
             </ResponsiveContainer>
           }
@@ -484,12 +527,18 @@ export default function Dashboard() {
           title="Total Notes" 
           value={absoluteTotalNotes} 
           icon={BookOpen} 
-          accentColor="#3b82f6" // blue-500
+          accentColor="#5ce638"
           chart={
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={generateChartData('notes')}>
-                <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#3b82f6' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                <Bar dataKey="value" name="Notes" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <defs>
+                  <linearGradient id="notesGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#5ce638" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#1f8c0a" stopOpacity={1}/>
+                  </linearGradient>
+                </defs>
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#5ce638' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                <Bar dataKey="value" name="Notes" fill="url(#notesGradient)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           }
@@ -497,37 +546,42 @@ export default function Dashboard() {
       </div>
 
       {/* Performance Overview Chart */}
-      <div className="bg-surface border border-border-dim rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm relative overflow-hidden mb-8">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 gap-4">
+      <div className="bg-surface border border-border-dim rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm relative overflow-hidden mb-8 group hover:border-accent-primary-border transition-all duration-500">
+        <div className="absolute top-0 left-0 w-64 h-64 bg-accent-primary-dim rounded-full blur-[100px] opacity-20 group-hover:opacity-30 transition-opacity duration-700 pointer-events-none"></div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 gap-4 relative z-10">
           <h2 className="text-xl md:text-2xl font-bold font-display tracking-tight flex items-center gap-3">
             <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-accent-primary" />
             Performance Overview
           </h2>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-accent-primary"></div>
+              <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-accent-primary shadow-[0_0_8px_rgba(57,255,20,0.5)]"></div>
               <span className="text-xs md:text-sm text-text-muted font-medium">Discipline Score</span>
             </div>
           </div>
         </div>
-        <div className="h-48 sm:h-64 md:h-72 w-full">
+        <div className="h-48 sm:h-64 md:h-72 w-full relative z-10">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={generateChartData('discipline')}>
               <defs>
                 <linearGradient id="colorDisciplineMain" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#84cc16" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#84cc16" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#39ff14" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#39ff14" stopOpacity={0}/>
                 </linearGradient>
+                <filter id="areaGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickLine={false} axisLine={false} dy={10} />
-              <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickLine={false} axisLine={false} dx={-10} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff15" vertical={false} />
+              <XAxis dataKey="name" stroke="#a3a3a3" tick={{ fill: '#a3a3a3', fontSize: 12, fontWeight: 500 }} tickLine={false} axisLine={false} dy={10} />
+              <YAxis stroke="#a3a3a3" tick={{ fill: '#a3a3a3', fontSize: 12, fontWeight: 500 }} tickLine={false} axisLine={false} dx={-10} />
               <Tooltip 
-                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', padding: '12px' }} 
+                contentStyle={{ backgroundColor: 'rgba(10,10,10,0.9)', backdropFilter: 'blur(10px)', borderColor: '#ffffff1a', borderRadius: '12px', padding: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)' }} 
                 itemStyle={{ color: '#fff', fontWeight: 'bold' }} 
                 cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 2 }} 
               />
-              <Area type="monotone" dataKey="value" name="Discipline Score" stroke="#84cc16" strokeWidth={3} fillOpacity={1} fill="url(#colorDisciplineMain)" activeDot={{ r: 6, fill: '#84cc16', stroke: '#fff', strokeWidth: 2 }} />
+              <Area type="monotone" dataKey="value" name="Discipline Score" stroke="#39ff14" strokeWidth={3} fillOpacity={1} fill="url(#colorDisciplineMain)" activeDot={{ r: 6, fill: '#39ff14', stroke: '#000', strokeWidth: 2 }} filter="url(#areaGlow)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -561,9 +615,10 @@ export default function Dashboard() {
                       <span className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wider">{item.category}</span>
                     </div>
                     <div className="self-end sm:self-auto">
-                      {item.status === 'completed' && <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-orange-500 shadow-[0_0_12px_rgba(255,165,0,0.4)]"></div>}
-                      {item.status === 'in-progress' && <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-red-500 shadow-[0_0_12px_rgba(255,42,42,0.4)] animate-pulse"></div>}
-                      {item.status === 'pending' && <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-gray-700 border-2 border-gray-600"></div>}
+                      {item.status === 'completed' && <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-orange-500 shadow-[0_0_12px_rgba(255,165,0,0.4)]" title="Completed"></div>}
+                      {item.status === 'incomplete' && <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-red-500 shadow-[0_0_12px_rgba(255,0,0,0.4)] border border-red-400" title="Incomplete"></div>}
+                      {item.status === 'in-progress' && <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-accent-primary shadow-[0_0_12px_rgba(57,255,20,0.4)] animate-pulse" title="In Progress"></div>}
+                      {item.status === 'pending' && <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-gray-700 border-2 border-gray-600" title="Pending"></div>}
                     </div>
                   </div>
                 ))
@@ -648,10 +703,14 @@ export default function Dashboard() {
           </div>
 
           {/* Time Distribution */}
-          <div className="bg-surface border border-border-dim rounded-3xl p-6 relative shadow-sm overflow-hidden min-h-[350px]">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold font-display tracking-tight">Time Distribution ({timeFilter})</h2>
-              <PieChartIcon className="w-5 h-5 text-gray-500" />
+          <div className="bg-surface border border-border-dim rounded-3xl p-6 relative shadow-sm overflow-hidden min-h-[350px] group hover:border-accent-primary-border transition-all duration-500">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-accent-primary-dim rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none"></div>
+            
+            <div className="flex items-center justify-between mb-8 relative z-10">
+              <h2 className="text-xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+                Time Distribution <span className="text-xs text-accent-primary font-medium bg-accent-primary-dim px-2 py-0.5 rounded-full border border-accent-primary-border">({timeFilter})</span>
+              </h2>
+              <PieChartIcon className="w-5 h-5 text-accent-primary" />
             </div>
             
             {userProfile.plan === 'Free' ? (
@@ -677,44 +736,55 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                <div className="h-48 w-full mb-6 relative flex items-center justify-center">
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                    <span className="text-2xl font-bold font-display text-white">
+                <div className="h-48 w-full mb-8 relative flex items-center justify-center">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 pt-2">
+                    <span className="text-3xl font-bold font-display text-white tracking-tight drop-shadow-md">
                       {Object.values(hoursByCategory).reduce((a, b) => a + (b as number), 0).toFixed(1).replace(/\.0$/, '')}h
                     </span>
-                    <span className="text-xs text-gray-400 uppercase tracking-widest mt-1">Total</span>
+                    <span className="text-[10px] text-accent-primary uppercase tracking-[0.2em] mt-1 font-bold">Total Time</span>
                   </div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
+                      <defs>
+                        {[
+                          { start: '#39ff14', end: '#1f8c0a' },
+                          { start: '#66ff4d', end: '#29b314' },
+                          { start: '#99ff85', end: '#3ddb1f' },
+                          { start: '#ccffbd', end: '#5ce638' },
+                          { start: '#e6ffdb', end: '#7fe864' },
+                          { start: '#ffffff', end: '#a2ed8f' }
+                        ].map((c, i) => (
+                          <linearGradient key={`grad-${i}`} id={`dashPieGrad-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor={c.start} />
+                            <stop offset="100%" stopColor={c.end} />
+                          </linearGradient>
+                        ))}
+                        <filter id="pieGlowDash" x="-20%" y="-20%" width="140%" height="140%">
+                          <feGaussianBlur stdDeviation="4" result="blur" />
+                          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                      </defs>
                       <Pie
                         data={Object.entries(hoursByCategory).map(([name, value]) => ({ name, value }))}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
+                        innerRadius={65}
+                        outerRadius={85}
+                        paddingAngle={6}
                         dataKey="value"
                         stroke="none"
+                        cornerRadius={12}
+                        animationBegin={0}
+                        animationDuration={1500}
+                        animationEasing="ease-out"
                       >
-                        {Object.entries(hoursByCategory).map(([category], index) => {
-                          const colors: Record<string, string> = {
-                            'Work': '#3b82f6', // blue
-                            'Fitness': '#22c55e', // green
-                            'Social': '#eab308', // yellow
-                            'Rest': '#ef4444', // red
-                            'Research': '#06b6d4', // cyan
-                            'Religious': '#8b5cf6', // purple
-                            'Spiritual': '#d946ef', // fuchsia
-                            'Hanging out': '#f97316', // orange
-                            'Games': '#14b8a6', // teal
-                            'Reading': '#6366f1', // indigo
-                          };
-                          return <Cell key={`cell-${index}`} fill={colors[category] || '#3b82f6'} />;
-                        })}
+                        {Object.entries(hoursByCategory).map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={`url(#dashPieGrad-${index % 6})`} filter="url(#pieGlowDash)" />
+                        ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '16px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
-                        itemStyle={{ color: '#fff' }}
+                        contentStyle={{ backgroundColor: 'rgba(10, 10, 10, 0.9)', backdropFilter: 'blur(10px)', border: '1px solid var(--border-strong)', borderRadius: '16px', color: '#fff', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
+                        itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                         formatter={(value: number) => [`${value.toFixed(1).replace(/\.0$/, '')}h`, 'Time']}
                       />
                     </PieChart>
@@ -723,15 +793,18 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   {Object.entries(hoursByCategory)
                     .sort(([, a], [, b]) => (b as number) - (a as number))
-                    .map(([category, hours]) => (
-                    <div key={category} className="flex items-center justify-between p-3 rounded-xl bg-surface border border-border-dim hover:bg-accent-primary-dim transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${category === 'Work' ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : category === 'Fitness' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : category === 'Social' || category === 'Hanging out' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]' : category === 'Rest' ? 'bg-red-500' : category === 'Research' ? 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]' : category === 'Religious' || category === 'Spiritual' ? 'bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]' : category === 'Games' ? 'bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]' : category === 'Reading' ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-gray-500'}`}></div>
-                        <span className="text-sm font-medium text-white">{category}</span>
+                    .map(([category, hours], index) => {
+                      const scheme = ['#39ff14', '#66ff4d', '#99ff85', '#ccffbd', '#e6ffdb', '#ffffff'];
+                      const color = scheme[index % scheme.length];
+                      return (
+                      <div key={category} className="flex items-center justify-between p-3.5 rounded-2xl bg-surface border border-border-dim hover:border-accent-primary-border hover:bg-accent-primary-dim transition-all duration-300">
+                        <div className="flex items-center gap-4">
+                          <div className="w-3.5 h-3.5 rounded-full shadow-md" style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}66` }}></div>
+                          <span className="text-[15px] font-semibold text-white tracking-wide">{category}</span>
+                        </div>
+                        <span className="text-sm font-mono font-medium text-white bg-black/60 border border-white/10 px-3 py-1 rounded-lg">{(hours as number).toFixed(1).replace(/\.0$/, '')}h</span>
                       </div>
-                      <span className="text-sm font-mono text-gray-400 bg-black/60 border border-white/5 px-2 py-0.5 rounded-md">{(hours as number).toFixed(1).replace(/\.0$/, '')}h</span>
-                    </div>
-                  ))}
+                    )})}
                 </div>
               </>
             )}
@@ -761,14 +834,18 @@ export default function Dashboard() {
 function MetricCard({ title, value, icon: Icon, colorClass, chart, accentColor = '#0a84ff' }: any) {
   return (
     <div className="relative p-4 md:p-6 rounded-2xl md:rounded-3xl bg-surface border border-border-dim overflow-hidden group hover:border-accent-primary-border transition-all duration-500 shadow-sm">
+      <div 
+        className="absolute top-0 right-0 w-24 h-24 rounded-full blur-[40px] opacity-10 pointer-events-none transition-opacity duration-500 group-hover:opacity-30 transform translate-x-1/2 -translate-y-1/2"
+        style={{ backgroundColor: accentColor }}
+      ></div>
       <div className="relative z-10 flex flex-col h-full justify-between">
         <div className="flex justify-between items-start mb-3 md:mb-4">
           <div>
             <h3 className="font-medium text-gray-500 text-[10px] md:text-xs uppercase tracking-widest mb-1">{title}</h3>
             <div className="text-2xl md:text-3xl font-display font-bold text-white tracking-tight">{value}</div>
           </div>
-          <div className="p-2 md:p-2.5 rounded-xl md:rounded-2xl bg-surface border border-border-dim">
-            <Icon className="w-4 h-4 md:w-5 md:h-5" style={{ color: accentColor }} />
+          <div className="p-2 md:p-2.5 rounded-xl md:rounded-2xl bg-surface/50 border border-border-dim shadow-inner backdrop-blur-sm relative overflow-hidden group-hover:border-white/10 transition-colors">
+            <Icon className="w-4 h-4 md:w-5 md:h-5 relative z-10" style={{ color: accentColor }} />
           </div>
         </div>
         {chart && (
