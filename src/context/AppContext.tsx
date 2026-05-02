@@ -281,7 +281,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           
           // Delete from Supabase if they exist
           if (fakeTemplates.length > 0) {
-            fakeTemplates.forEach(t => supabaseService.deleteSavedSchedule(t.id).catch(() => {}));
+            fakeTemplates.forEach(t => {
+              const updatedSchedules = loadedState.savedSchedules.filter(s => s.id !== t.id);
+              supabaseService.updateSavedSchedules(session.user.id, updatedSchedules).catch(() => {});
+            });
           }
           if (fakeScheduleIds.length > 0) {
             fakeScheduleIds.forEach(id => supabaseService.deleteSchedule(id).catch(() => {}));
@@ -292,8 +295,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           
           if (isNewUser) {
             try {
-              await supabaseService.upsertSettings(session.user.id, loadedState.userSettings);
-              await supabaseService.upsertProfile(session.user.id, loadedState.userProfile);
+              await supabaseService.updateSettings(session.user.id, loadedState.userSettings);
+              await supabaseService.updateProfile(session.user.id, loadedState.userProfile);
               
               // Migrate current day data
               if (localState?.currentDayData) {
@@ -578,7 +581,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       
       // Save to Supabase in the background
       if (session) {
-        supabaseService.upsertSettings(session.user.id, newSettings).catch(console.error);
+        supabaseService.updateSettings(session.user.id, newSettings).catch(console.error);
       }
       
       return { ...prev, userSettings: newSettings };
@@ -599,9 +602,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     const { data: { session } } = await supabase.auth.getSession();
     if (session && newProfile) {
-      await supabaseService.upsertProfile(session.user.id, newProfile);
+      await supabaseService.updateProfile(session.user.id, newProfile);
       if (newSettings) {
-        await supabaseService.upsertSettings(session.user.id, newSettings);
+        await supabaseService.updateSettings(session.user.id, newSettings);
       }
     }
   };
@@ -623,7 +626,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { ...prev, userProfile: newProfile };
     });
     const { data: { session } } = await supabase.auth.getSession();
-    if (session && newProfile) await supabaseService.upsertProfile(session.user.id, newProfile);
+    if (session && newProfile) await supabaseService.updateProfile(session.user.id, newProfile);
   };
 
   const saveScheduleTemplate = async (name: string, tasks: Omit<ScheduleItem, 'id' | 'status'>[]) => {
@@ -708,7 +711,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
     });
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) await supabaseService.createSchedule(session.user.id, date, item);
+    if (session) await supabaseService.createSchedule(session.user.id, date, item).catch(e => setSyncError("Failed to save task: " + e.message));
   };
 
   const reorderSchedule = (startIndex: number, endIndex: number) => {
@@ -867,7 +870,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     // Update settings in DB
     if (session) {
-      await supabaseService.upsertSettings(session.user.id, {
+      await supabaseService.updateSettings(session.user.id, {
         ...state.userSettings,
         initialBalance: 0,
         savingsBalance: 0,
@@ -908,7 +911,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       currentDayData: { ...prev.currentDayData, habits: [...prev.currentDayData.habits, item] }
     }));
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) await supabaseService.createHabit(session.user.id, item);
+    if (session) await supabaseService.createHabit(session.user.id, item).catch(e => setSyncError("Failed to save habit: " + e.message));
   };
 
   const updateHabit = async (id: string, updates: Partial<HabitItem>) => {
@@ -1035,7 +1038,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
     });
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) await supabaseService.createExpense(session.user.id, date, item);
+    if (session) await supabaseService.createExpense(session.user.id, date, item).catch(e => setSyncError("Failed to save expense: " + e.message));
   };
 
   const updateExpense = async (id: string, updates: Partial<ExpenseItem>) => {
@@ -1073,7 +1076,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (shouldAdd) {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) await supabaseService.createNote(session.user.id, date, item);
+      if (session) await supabaseService.createNote(session.user.id, date, item).catch(e => setSyncError("Failed to save note: " + e.message));
     }
   };
 

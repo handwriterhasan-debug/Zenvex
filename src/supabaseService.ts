@@ -3,10 +3,9 @@ import { DailyData, ExpenseItem, HabitItem, NoteItem, ScheduleItem, UserProfile,
 
 export const supabaseService = {
   async loadUserData(userId: string) {
-    // We wrap each fetch in a try/catch or use an array of promises with .catch() to prevent a single missing table from failing the entire load.
     const safeFetch = async (query: any) => {
       try {
-        const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 30000));
+        const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 10000));
         return await Promise.race([query, timeoutPromise]);
       } catch (e: any) {
         if (e.message !== 'Query timeout') {
@@ -17,89 +16,144 @@ export const supabaseService = {
     };
 
     const fetches = await Promise.all([
-      safeFetch(supabase.from('profiles').select('*').eq('id', userId).maybeSingle()),
-      safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle()),
-      safeFetch(supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle()),
-      safeFetch(supabase.from('schedules').select('*').eq('user_id', userId).order('created_at', { ascending: true })),
-      safeFetch(supabase.from('habits').select('*').eq('user_id', userId).order('created_at', { ascending: true })),
-      safeFetch(supabase.from('habit_logs').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('expenses').select('*').eq('user_id', userId).order('timestamp', { ascending: true })),
-      safeFetch(supabase.from('notes').select('*').eq('user_id', userId).order('timestamp', { ascending: true })),
-      safeFetch(supabase.from('saved_schedules').select('*').eq('user_id', userId).order('created_at', { ascending: true })),
-      safeFetch(supabase.from('notifications').select('*').eq('user_id', userId).order('timestamp', { ascending: false }))
+      safeFetch(supabase.from('profile').select('*').eq('id', userId).maybeSingle()),
+      safeFetch(supabase.from('tasks').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('expenses').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('notes').select('*').eq('user_id', userId))
     ]);
 
     const hasError = fetches.some(f => f.error != null);
 
     const [
-      { data: profile }, { data: userProfile }, { data: settings },
-      { data: schedules }, { data: habits }, { data: habitLogs },
-      { data: expenses }, { data: notes }, { data: savedSchedules },
-      { data: notifications }
+      { data: profileRow },
+      { data: tasksRow },
+      { data: habitsRow },
+      { data: expensesRow },
+      { data: notesRow }
     ] = fetches;
-    
-    // In case the settings table uses 'id' instead of 'user_id'
-    let finalSettings = settings;
-    if (!finalSettings && !hasError) {
-      const { data: altSettings } = await safeFetch(supabase.from('user_settings').select('*').eq('id', userId).maybeSingle());
-      finalSettings = altSettings;
-    }
 
-    const actualProfile = profile || userProfile;
+    const actualProfile = profileRow || {};
+    const settings = actualProfile.settings || {};
+    const metadata = actualProfile.metadata || {};
+
+    const schedules: any[] = tasksRow || [];
+    const habits: any[] = habitsRow || [];
+    const expenses: any[] = expensesRow || [];
+    const notes: any[] = notesRow || [];
+
+    // Parse tasks back into ScheduleItems
+    const parsedSchedules = schedules.map(s => {
+      const meta = s.metadata || {};
+      return {
+        id: s.id,
+        date: meta.date,
+        timeStart: meta.timeStart || '',
+        timeEnd: meta.timeEnd || '',
+        task: s.title,
+        category: meta.category || '',
+        status: s.status,
+        actualHours: meta.actualHours,
+        excuse: meta.excuse
+      };
+    });
+
+    // Parse habits back into HabitItems
+    const parsedHabits = habits.map(h => {
+      const meta = h.metadata || {};
+      return {
+        id: h.id,
+        name: h.name,
+        category: meta.category || '',
+        target: meta.target || 7,
+        color: meta.color || '#10b981',
+        startDate: meta.startDate || h.created_at,
+        completedToday: false, // Computed below
+        streak: h.streak || 0,
+        completed_dates: h.completed_dates || []
+      };
+    });
+
+    // Parse expenses
+    const parsedExpenses = expenses.map(e => {
+      const meta = e.metadata || {};
+      return {
+        id: e.id,
+        date: e.date,
+        title: e.description || '', // Mapped title to description in db
+        amount: Number(e.amount),
+        type: meta.type || 'expense',
+        category: e.category || '',
+        customCategory: meta.customCategory,
+        source: meta.source,
+        timestamp: meta.timestamp || e.created_at
+      };
+    });
+
+    // Parse notes
+    const parsedNotes = notes.map(n => {
+      const meta = n.metadata || {};
+      return {
+        id: n.id,
+        date: meta.date,
+        title: n.title || '',
+        content: n.content || '',
+        tags: meta.tags || [],
+        timestamp: meta.timestamp || n.created_at,
+        isExcuse: meta.isExcuse
+      };
+    });
 
     // Construct AppState from relational data
-    const allDates = new Set(
-      [
-        ...(schedules || []).map(s => s.date),
-        ...(habitLogs || []).map(h => h.completed_date),
-        ...(expenses || []).map(e => e.date),
-        ...(notes || []).map(n => n.date)
-      ].filter(Boolean)
-    );
+    const allDates = new Set([
+      ...parsedSchedules.map(s => s.date),
+      ...parsedHabits.flatMap(h => h.completed_dates || []),
+      ...parsedExpenses.map(e => e.date),
+      ...parsedNotes.map(n => n.date)
+    ].filter(Boolean));
 
     const history: DailyData[] = Array.from(allDates).map(date => {
       return {
         date,
-        schedule: (schedules || []).filter(s => s.date === date).map(s => ({
+        schedule: parsedSchedules.filter(s => s.date === date).map(s => ({
           id: s.id,
-          timeStart: s.time_start,
-          timeEnd: s.time_end,
+          timeStart: s.timeStart,
+          timeEnd: s.timeEnd,
           task: s.task,
           category: s.category,
           status: s.status,
-          actualHours: s.actual_hours,
+          actualHours: s.actualHours,
           excuse: s.excuse
         })).sort((a, b) => a.timeStart.localeCompare(b.timeStart)),
-        habits: (habits || []).map(h => {
-          const log = (habitLogs || []).find(l => l.habit_id === h.id && l.completed_date === date);
+        habits: parsedHabits.map(h => {
           return {
             id: h.id,
             name: h.name,
             category: h.category,
-            target: h.target_days,
-            color: h.color || '#10b981', // Fallback color
-            startDate: h.created_at,
-            completedToday: !!log,
-            streak: h.streak || 0
+            target: h.target,
+            color: h.color,
+            startDate: h.startDate,
+            completedToday: h.completed_dates?.includes(date),
+            streak: h.streak
           };
         }),
-        expenses: (expenses || []).filter(e => e.date === date).map(e => ({
+        expenses: parsedExpenses.filter(e => e.date === date).map(e => ({
           id: e.id,
           title: e.title,
           amount: e.amount,
           type: e.type,
           category: e.category,
-          customCategory: e.custom_category,
+          customCategory: e.customCategory,
           source: e.source,
           timestamp: e.timestamp
         })),
-        notes: (notes || []).filter(n => n.date === date).map(n => ({
+        notes: parsedNotes.filter(n => n.date === date).map(n => ({
           id: n.id,
           title: n.title,
           content: n.content,
           tags: n.tags,
           timestamp: n.timestamp,
-          isExcuse: n.is_excuse
+          isExcuse: n.isExcuse
         }))
       };
     }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -107,84 +161,77 @@ export const supabaseService = {
     return {
       hasError,
       profile: actualProfile ? {
-        name: actualProfile.name,
-        gender: actualProfile.gender || 'Not specified',
-        age: actualProfile.age || 'Not specified',
-        country: actualProfile.country || 'Not specified',
-        plan: ((actualProfile.plan?.toLowerCase() === 'pro' || actualProfile.subscription_plan === 'pro') ? 'Pro' : 
-              (actualProfile.plan?.toLowerCase() === 'premium' || actualProfile.subscription_plan === 'premium') ? 'Premium' : 'Free') as 'Free' | 'Pro' | 'Premium',
-        disciplineScore: actualProfile.discipline_score || 0
+        name: actualProfile.username || 'User',
+        gender: metadata.gender || 'Not specified',
+        age: metadata.age || 'Not specified',
+        country: metadata.country || 'Not specified',
+        plan: metadata.plan || 'Free',
+        disciplineScore: metadata.disciplineScore || 0,
+        avatarUrl: actualProfile.avatar_url
       } : undefined,
-      settings: (finalSettings || actualProfile) ? {
-        name: actualProfile?.name || finalSettings?.name || 'User',
-        dayEndTime: actualProfile?.day_end_time || finalSettings?.day_end_time || '23:59',
-        theme: finalSettings?.theme || 'dark',
-        initialBalance: finalSettings?.initial_balance || 0,
-        savingsBalance: finalSettings?.savings_balance || 0,
-        monthlyIncome: finalSettings?.monthly_income || 0,
-        currency: finalSettings?.currency || 'PKR'
+      settings: actualProfile ? {
+        name: actualProfile.username || 'User',
+        dayEndTime: settings.dayEndTime || '23:59',
+        theme: settings.theme || 'dark',
+        initialBalance: settings.initialBalance || 0,
+        savingsBalance: settings.savingsBalance || 0,
+        monthlyIncome: settings.monthlyIncome || 0,
+        currency: settings.currency || 'PKR'
       } : undefined,
       history,
-      savedSchedules: (savedSchedules || []).map(s => ({
-        id: s.id,
-        name: s.name,
-        tasks: s.tasks
-      })),
-      notifications: (notifications || []).map(n => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        type: n.type,
-        timestamp: n.timestamp,
-        read: n.read
-      })),
-      habits: (habits || []).map(h => ({
-        id: h.id,
-        name: h.name,
-        category: h.category,
-        target: h.target_days,
-        color: h.color || '#10b981',
-        startDate: h.created_at,
-        completedToday: false,
-        streak: h.streak || 0
-      }))
+      habits: parsedHabits,
+      savedSchedules: metadata.savedSchedules || [],
+      notifications: metadata.notifications || []
     };
   },
 
   async createSchedule(userId: string, date: string, item: ScheduleItem) {
-    const { data, error } = await supabase.from('schedules').insert({
+    const { data, error } = await supabase.from('tasks').insert({
       id: item.id,
       user_id: userId,
-      date,
-      time_start: item.timeStart,
-      time_end: item.timeEnd,
-      task: item.task,
-      category: item.category,
+      title: item.task,
+      description: item.category, // Map category to description
       status: item.status,
-      actual_hours: item.actualHours,
-      excuse: item.excuse
+      due_date: new Date().toISOString(),
+      order: 0,
+      metadata: {
+        date,
+        timeStart: item.timeStart,
+        timeEnd: item.timeEnd,
+        category: item.category,
+        actualHours: item.actualHours,
+        excuse: item.excuse
+      }
     }).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateSchedule(id: string, updates: Partial<ScheduleItem>) {
-    const dbUpdates: any = {};
-    if (updates.timeStart !== undefined) dbUpdates.time_start = updates.timeStart;
-    if (updates.timeEnd !== undefined) dbUpdates.time_end = updates.timeEnd;
-    if (updates.task !== undefined) dbUpdates.task = updates.task;
-    if (updates.category !== undefined) dbUpdates.category = updates.category;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if ('actualHours' in updates) dbUpdates.actual_hours = updates.actualHours === undefined ? null : updates.actualHours;
-    if ('excuse' in updates) dbUpdates.excuse = updates.excuse === undefined ? null : updates.excuse;
+    // First fetch existing to merge metadata
+    const { data: existing } = await supabase.from('tasks').select('metadata').eq('id', id).single();
+    const existingMeta = existing?.metadata || {};
 
-    const { data, error } = await supabase.from('schedules').update(dbUpdates).eq('id', id).select().single();
+    const dbUpdates: any = {};
+    if (updates.task !== undefined) dbUpdates.title = updates.task;
+    if (updates.category !== undefined) dbUpdates.description = updates.category;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+
+    const newMeta = { ...existingMeta };
+    if (updates.timeStart !== undefined) newMeta.timeStart = updates.timeStart;
+    if (updates.timeEnd !== undefined) newMeta.timeEnd = updates.timeEnd;
+    if (updates.category !== undefined) newMeta.category = updates.category;
+    if ('actualHours' in updates) newMeta.actualHours = updates.actualHours === undefined ? null : updates.actualHours;
+    if ('excuse' in updates) newMeta.excuse = updates.excuse === undefined ? null : updates.excuse;
+    dbUpdates.metadata = newMeta;
+
+    const { data, error } = await supabase.from('tasks').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
 
   async deleteSchedule(id: string) {
-    const { error } = await supabase.from('schedules').delete().eq('id', id);
+    const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) throw error;
   },
 
@@ -193,21 +240,34 @@ export const supabaseService = {
       id: item.id,
       user_id: userId,
       name: item.name,
-      category: item.category,
-      target_days: item.target,
-      streak: item.streak || 0
+      frequency: item.target.toString(),
+      streak: item.streak || 0,
+      completed_dates: [],
+      metadata: {
+        category: item.category,
+        target: item.target,
+        color: item.color,
+        startDate: item.startDate
+      }
     }).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateHabit(id: string, updates: Partial<HabitItem>) {
+    const { data: existing } = await supabase.from('habits').select('metadata, completed_dates').eq('id', id).single();
+    const existingMeta = existing?.metadata || {};
+
     const dbUpdates: any = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.category !== undefined) dbUpdates.category = updates.category;
-    if (updates.target !== undefined) dbUpdates.target_days = updates.target;
     if (updates.streak !== undefined) dbUpdates.streak = updates.streak;
-    if (updates.color !== undefined) dbUpdates.color = updates.color;
+    if (updates.target !== undefined) dbUpdates.frequency = updates.target.toString();
+
+    const newMeta = { ...existingMeta };
+    if (updates.category !== undefined) newMeta.category = updates.category;
+    if (updates.target !== undefined) newMeta.target = updates.target;
+    if (updates.color !== undefined) newMeta.color = updates.color;
+    dbUpdates.metadata = newMeta;
 
     const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
@@ -220,48 +280,63 @@ export const supabaseService = {
   },
 
   async upsertHabitLog(userId: string, habitId: string, date: string, completed: boolean) {
-    if (completed) {
-      const { data, error } = await supabase.from('habit_logs').insert({
-        habit_id: habitId,
-        user_id: userId,
-        completed_date: date
-      }).select().single();
-      if (error) throw error;
-      return data;
-    } else {
-      const { error } = await supabase.from('habit_logs')
-        .delete()
-        .match({ habit_id: habitId, user_id: userId, completed_date: date });
-      if (error) throw error;
-      return null;
+    const { data: existing } = await supabase.from('habits').select('completed_dates, streak').eq('id', habitId).single();
+    if (!existing) return;
+
+    let dates = existing.completed_dates || [];
+    let streak = existing.streak || 0;
+
+    if (completed && !dates.includes(date)) {
+      dates.push(date);
+      streak += 1;
+    } else if (!completed && dates.includes(date)) {
+      dates = dates.filter((d: string) => d !== date);
+      streak = Math.max(0, streak - 1);
     }
+
+    const { data, error } = await supabase.from('habits').update({
+      completed_dates: dates,
+      streak: streak
+    }).eq('id', habitId).select().single();
+
+    if (error) throw error;
+    return data;
   },
 
   async createExpense(userId: string, date: string, item: ExpenseItem) {
     const { data, error } = await supabase.from('expenses').insert({
       id: item.id,
       user_id: userId,
-      date,
-      title: item.title,
       amount: item.amount,
-      type: item.type,
       category: item.category,
-      custom_category: item.customCategory,
-      source: item.source,
-      timestamp: item.timestamp
+      description: item.title,
+      date: date,
+      metadata: {
+        type: item.type,
+        customCategory: item.customCategory,
+        source: item.source,
+        timestamp: item.timestamp
+      }
     }).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateExpense(id: string, updates: Partial<ExpenseItem>) {
+    const { data: existing } = await supabase.from('expenses').select('metadata').eq('id', id).single();
+    const existingMeta = existing?.metadata || {};
+
     const dbUpdates: any = {};
-    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.title !== undefined) dbUpdates.description = updates.title;
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
-    if (updates.type !== undefined) dbUpdates.type = updates.type;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
-    if (updates.customCategory !== undefined) dbUpdates.custom_category = updates.customCategory;
-    if (updates.source !== undefined) dbUpdates.source = updates.source;
+
+    const newMeta = { ...existingMeta };
+    if (updates.type !== undefined) newMeta.type = updates.type;
+    if (updates.customCategory !== undefined) newMeta.customCategory = updates.customCategory;
+    if (updates.source !== undefined) newMeta.source = updates.source;
+    if (updates.timestamp !== undefined) newMeta.timestamp = updates.timestamp;
+    dbUpdates.metadata = newMeta;
 
     const { data, error } = await supabase.from('expenses').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
@@ -277,24 +352,15 @@ export const supabaseService = {
     const { data, error } = await supabase.from('notes').insert({
       id: item.id,
       user_id: userId,
-      date,
       title: item.title,
       content: item.content,
-      tags: item.tags,
-      timestamp: item.timestamp,
-      is_excuse: item.isExcuse
+      metadata: {
+        date,
+        tags: item.tags,
+        timestamp: item.timestamp,
+        isExcuse: item.isExcuse
+      }
     }).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  async updateNote(id: string, updates: Partial<NoteItem>) {
-    const dbUpdates: any = {};
-    if (updates.title !== undefined) dbUpdates.title = updates.title;
-    if (updates.content !== undefined) dbUpdates.content = updates.content;
-    if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
-
-    const { data, error } = await supabase.from('notes').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
@@ -304,95 +370,60 @@ export const supabaseService = {
     if (error) throw error;
   },
 
-  async upsertProfile(userId: string, profile: UserProfile) {
-    const payload = {
-      id: userId,
-      name: profile.name,
-      plan: profile.plan || 'Free', // for profiles
-      subscription_plan: profile.plan?.toLowerCase() || 'free', // for user_profiles
-      discipline_score: profile.disciplineScore || 0,
-      updated_at: new Date().toISOString()
-    };
+  async updateProfile(userId: string, updates: Partial<UserProfile>) {
+    const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
+    const existingMeta = existing?.metadata || {};
     
-    // Try profiles first, if fails try user_profiles
-    const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-    if (error) {
-      await supabase.from('user_profiles').upsert(payload, { onConflict: 'id' });
-    }
-    return payload;
-  },
-
-  async upsertSettings(userId: string, settings: UserSettings) {
-    // Let's just update the specific fields in profile instead of upserting a minimal profile which might overwrite things
-    const profilePayload = {
-      id: userId,
-      name: settings.name,
-      updated_at: new Date().toISOString()
-    };
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.username = updates.name;
+    if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
     
-    await supabase.from('profiles').update(profilePayload).eq('id', userId);
-    await supabase.from('user_profiles').update(profilePayload).eq('id', userId);
+    const newMeta = { ...existingMeta, ...updates };
+    dbUpdates.metadata = newMeta;
+    
+    const { data, error } = await supabase.from('profile').update(dbUpdates).eq('id', userId).select().single();
+    if (error) throw error;
+    return data;
+  },
 
-    const payload = {
-      user_id: userId,
-      name: settings.name,
-      day_end_time: settings.dayEndTime,
-      theme: settings.theme,
-      initial_balance: settings.initialBalance,
-      savings_balance: settings.savingsBalance,
-      monthly_income: settings.monthlyIncome,
-      initial_expenses: settings.initialExpenses,
-      currency: settings.currency,
-      updated_at: new Date().toISOString()
-    };
-
-    const { error } = await supabase.from('user_settings').upsert(payload, { onConflict: 'user_id' });
-    if (error) {
-      // If user_id conflict fails, try id
-      const backupPayload = { ...payload, id: userId };
-      delete backupPayload.user_id;
-      await supabase.from('user_settings').upsert(backupPayload, { onConflict: 'id' });
+  async updateSettings(userId: string, updates: Partial<UserSettings>) {
+    const { data: existing } = await supabase.from('profile').select('settings, metadata, username').eq('id', userId).single();
+    
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) {
+      dbUpdates.username = updates.name; // Keep name in sync with username
     }
-  },
+    
+    const newSettings = { ...(existing?.settings || {}), ...updates };
+    dbUpdates.settings = newSettings;
+    
+    // Create profile if doesn't exist
+    if (!existing) {
+       const { error } = await supabase.from('profile').insert({
+         id: userId,
+         username: updates.name,
+         settings: newSettings
+       });
+       if (error) throw error;
+       return;
+    }
 
-  async createSavedSchedule(userId: string, item: SavedSchedule) {
-    const { data, error } = await supabase.from('saved_schedules').insert({
-      id: item.id,
-      user_id: userId,
-      name: item.name,
-      tasks: item.tasks
-    }).select().single();
+    const { data, error } = await supabase.from('profile').update(dbUpdates).eq('id', userId).select().single();
     if (error) throw error;
     return data;
   },
 
-  async deleteSavedSchedule(id: string) {
-    const { error } = await supabase.from('saved_schedules').delete().eq('id', id);
+  async updateNotifications(userId: string, notifications: unknown[]) {
+    const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
+    const newMeta = { ...(existing?.metadata || {}), notifications };
+    const { error } = await supabase.from('profile').update({ metadata: newMeta }).eq('id', userId);
     if (error) throw error;
   },
 
-  async createNotification(userId: string, item: NotificationItem) {
-    const { data, error } = await supabase.from('notifications').insert({
-      id: item.id,
-      user_id: userId,
-      title: item.title,
-      message: item.message,
-      type: item.type,
-      timestamp: item.timestamp,
-      read: item.read
-    }).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  async updateNotification(id: string, updates: Partial<NotificationItem>) {
-    const { data, error } = await supabase.from('notifications').update(updates).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  async deleteNotifications(userId: string) {
-    const { error } = await supabase.from('notifications').delete().eq('user_id', userId);
-    if (error) throw error;
+  async updateSavedSchedules(userId: string, schedules: unknown[]) {
+     const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
+     const newMeta = { ...(existing?.metadata || {}), savedSchedules: schedules };
+     const { error } = await supabase.from('profile').update({ metadata: newMeta }).eq('id', userId);
+     if (error) throw error;
   }
 };
