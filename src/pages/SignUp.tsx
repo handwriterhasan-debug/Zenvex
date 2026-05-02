@@ -40,8 +40,8 @@ export default function SignUp() {
           email,
           password,
           options: {
-            // Redirect to signin page with a verified flag after they click the email link
-            emailRedirectTo: `${window.location.origin}/signin?verified=true`
+            // Updated to point to /auth/callback as requested
+            emailRedirectTo: `https://zenvex-ten.vercel.app/auth/callback`
           }
         });
 

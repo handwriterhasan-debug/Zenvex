@@ -23,6 +23,8 @@ import Subscription from './pages/Subscription';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminComplaints from './pages/AdminComplaints';
 
+import AuthCallback from './pages/AuthCallback';
+
 export default function App() {
   return (
     <AppProvider>
@@ -31,6 +33,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
