@@ -11,6 +11,7 @@ export default function Notes() {
   const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null);
   const [newNote, setNewNote] = useState({ title: '', content: '', tags: '', isExcuse: false });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -40,8 +41,15 @@ export default function Notes() {
     allNotes.push(...(day.notes || []));
   });
 
+  // Filter notes based on search query
+  const filteredNotes = allNotes.filter(note => 
+    note.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (note.tags && note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())))
+  );
+
   // Sort by newest first
-  allNotes.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  filteredNotes.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   return (
     <>
@@ -118,15 +126,25 @@ export default function Notes() {
         {/* Right Column - Previous Notes */}
         <div className="space-y-6">
           <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold font-display">Recent Notes</h2>
-              <BookOpen className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold font-display text-text-main">Recent Notes</h2>
+              <BookOpen className="w-5 h-5 text-text-muted" />
+            </div>
+
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search notes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-surface-light border border-border-dim bg-opacity-50 text-text-main rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent-primary transition-colors placeholder:text-text-faint"
+              />
             </div>
             
             <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-              {allNotes.length === 0 ? (
-                <div className="text-center py-10 text-gray-500">No notes yet.</div>
-              ) : allNotes.map((note, i) => (
+              {filteredNotes.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">{allNotes.length === 0 ? "No notes yet." : "No matching notes."}</div>
+              ) : filteredNotes.map((note, i) => (
                 <div 
                   key={`${note.id}-${i}`} 
                   onClick={() => {

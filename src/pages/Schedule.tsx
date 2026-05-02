@@ -1,14 +1,15 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, CheckCircle2, MoreVertical, Trash2, Edit2, X, PieChart as PieChartIcon, XCircle } from 'lucide-react';
+import { Plus, Clock, CheckCircle2, MoreVertical, Trash2, Edit2, X, PieChart as PieChartIcon, XCircle, GripVertical } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useState } from 'react';
 import { CustomTimePicker } from '../components/CustomTimePicker';
 import { formatTime12Hour } from '../utils/timeUtils';
 import { LiveCalendar } from '../components/LiveCalendar';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 export default function Schedule() {
-  const { currentDayData, addSchedule, updateSchedule, saveScheduleTemplate, clearSchedule, deleteScheduleTask } = useAppContext();
+  const { currentDayData, addSchedule, updateSchedule, reorderSchedule, saveScheduleTemplate, clearSchedule, deleteScheduleTask } = useAppContext();
   const { schedule } = currentDayData;
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -30,6 +31,11 @@ export default function Schedule() {
   const [saveTemplateModal, setSaveTemplateModal] = useState<{ isOpen: boolean; name: string }>({ isOpen: false, name: '' });
   const [clearScheduleModal, setClearScheduleModal] = useState(false);
   const [longTaskModal, setLongTaskModal] = useState<{ isOpen: boolean; plannedHours: number; pendingTask: any | null }>({ isOpen: false, plannedHours: 0, pendingTask: null });
+
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    reorderSchedule(result.source.index, result.destination.index);
+  };
 
   const categories = [
     { name: 'Work', color: 'bg-blue-500' },
@@ -138,7 +144,7 @@ export default function Schedule() {
         excuse: ''
       });
     } else {
-      updateSchedule(id, { status: 'pending', actualHours: undefined, excuse: undefined });
+      updateSchedule(id, { status: 'pending', actualHours: null, excuse: null });
     }
   };
 
@@ -167,7 +173,7 @@ export default function Schedule() {
       .filter(s => s.category === cat.name)
       .reduce((acc, curr) => {
         const planned = calculatePlannedHours(curr.timeStart, curr.timeEnd);
-        return acc + ((curr.status === 'completed' || curr.status === 'incomplete') && curr.actualHours !== undefined ? Number(curr.actualHours) : planned);
+        return acc + ((curr.status === 'completed' || curr.status === 'incomplete') && curr.actualHours != null ? Number(curr.actualHours) : planned);
       }, 0);
     return { name: cat.name, value: hours, color: cat.color.replace('bg-', 'text-') }; // Just a hack to get color, we'll map it properly
   }).filter(d => d.value > 0);
@@ -177,7 +183,7 @@ export default function Schedule() {
     return {
       name: task.task.length > 15 ? task.task.substring(0, 15) + '...' : task.task,
       Planned: planned,
-      Actual: (task.status === 'completed' || task.status === 'incomplete') && task.actualHours !== undefined ? Number(task.actualHours) : 0,
+      Actual: (task.status === 'completed' || task.status === 'incomplete') && task.actualHours != null ? Number(task.actualHours) : 0,
     };
   });
 
@@ -370,87 +376,114 @@ export default function Schedule() {
         </div>
       )}
 
-      <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
-        <div className="space-y-4">
-          {schedule.length === 0 ? (
-            <div className="text-center py-10 text-text-muted">No tasks scheduled for today.</div>
-          ) : schedule.map((item, i) => (
-            <div key={`${item.id}-${i}`} className="group relative flex flex-col md:flex-row md:items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl bg-surface border border-border-dim hover:border-accent-primary-border hover:bg-accent-primary-dim transition-colors shadow-sm">
-              <div className="w-auto md:w-48 flex items-center gap-2 md:gap-3 text-xs md:text-sm font-mono text-text-muted pr-16 md:pr-0">
-                <Clock className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
-                <span className="truncate">{formatTime12Hour(item.timeStart)} - {formatTime12Hour(item.timeEnd)}</span>
-              </div>
-              
-              <div className="flex-1 flex items-center gap-2 md:gap-3">
-                <div className={`w-1 h-6 md:h-8 rounded-full ${categories.find(c => c.name === item.category)?.color || 'bg-gray-500'}`}></div>
-                <div className="min-w-0">
-                  <h3 className="font-medium text-base md:text-lg truncate text-text-main">{item.task}</h3>
-                  <div className="flex flex-wrap items-center gap-1.5 md:gap-3 text-[10px] md:text-xs text-text-muted mt-0.5 md:mt-1">
-                    <span className="bg-surface-light px-1.5 py-0.5 rounded-md">{item.category}</span>
-                    {item.status === 'completed' && item.actualHours !== undefined && (
-                      <>
-                        <span className="hidden sm:inline">•</span>
-                        <span className="text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">{item.actualHours}h completed</span>
-                      </>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
+          <Droppable droppableId="schedule-list">
+            {(provided) => (
+              <div 
+                className="flex flex-col gap-4"
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+              >
+                {schedule.length === 0 ? (
+                  <div className="text-center py-10 text-text-muted">No tasks scheduled for today.</div>
+                ) : schedule.map((item, index) => (
+                  <Draggable key={item.id} draggableId={item.id} index={index}>
+                    {(provided, snapshot) => (
+                      <div 
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        style={provided.draggableProps.style}
+                        className={`group relative flex flex-col md:flex-row md:items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl bg-surface border hover:border-accent-primary-border hover:bg-accent-primary-dim transition-colors shadow-sm ${snapshot.isDragging ? 'border-accent-primary shadow-lg z-50' : 'border-border-dim'}`}
+                      >
+                        <div 
+                          {...provided.dragHandleProps}
+                          className="absolute right-3 top-3 md:static md:right-auto md:top-auto cursor-grab active:cursor-grabbing text-text-faint hover:text-text-muted p-1 md:p-2 md:-ml-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                        >
+                          <GripVertical className="w-5 h-5" />
+                        </div>
+                        
+                        <div className="w-auto md:w-36 lg:w-48 flex items-center gap-2 md:gap-3 text-xs md:text-sm font-mono text-text-muted pr-8 md:pr-0 pl-1 md:pl-2">
+                          <Clock className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
+                          <span className="truncate">{formatTime12Hour(item.timeStart)} - {formatTime12Hour(item.timeEnd)}</span>
+                        </div>
+                        
+                        <div className="flex-1 flex items-center gap-2 md:gap-3">
+                          <div className={`w-1 h-6 md:h-8 rounded-full ${categories.find(c => c.name === item.category)?.color || 'bg-gray-500'}`}></div>
+                          <div className="min-w-0">
+                            <h3 className="font-medium text-base md:text-lg truncate text-text-main">{item.task}</h3>
+                            <div className="flex flex-wrap items-center gap-1.5 md:gap-3 text-[10px] md:text-xs text-text-muted mt-0.5 md:mt-1">
+                              <span className="bg-surface-light px-1.5 py-0.5 rounded-md">{item.category}</span>
+                              {item.status === 'completed' && item.actualHours != null && (
+                                <>
+                                  <span className="hidden sm:inline">•</span>
+                                  <span className="text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">{item.actualHours}h completed</span>
+                                </>
+                              )}
+                              {item.status === 'incomplete' && item.actualHours != null && (
+                                <>
+                                  <span className="hidden sm:inline">•</span>
+                                  <span className="text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-md border border-red-500/20">{item.actualHours}h completed (Incomplete)</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between md:justify-end gap-3 mt-3 md:mt-0 w-full md:w-auto">
+                          <button 
+                            onClick={() => toggleStatus(item.id, item.status)}
+                            className="cursor-pointer shrink-0"
+                          >
+                            {item.status === 'completed' && (
+                              <span className="flex items-center gap-1 text-emerald-500 text-sm font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                                <CheckCircle2 className="w-4 h-4" /> Completed
+                              </span>
+                            )}
+                            {item.status === 'in-progress' && (
+                              <span className="flex items-center gap-1.5 text-accent-primary text-sm font-medium bg-accent-primary-dim px-3 py-1.5 rounded-full border border-accent-primary-border">
+                                <div className="w-2 h-2 rounded-full bg-accent-primary animate-pulse"></div> In Progress
+                              </span>
+                            )}
+                            {item.status === 'incomplete' && (
+                              <span className="flex items-center gap-1 text-red-500 text-sm font-medium bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20">
+                                <XCircle className="w-4 h-4" /> Incomplete
+                              </span>
+                            )}
+                            {item.status === 'pending' && (
+                              <span className="flex items-center gap-1 text-text-muted text-sm font-medium bg-surface-light px-3 py-1.5 rounded-full hover:bg-surface-hover border border-border-dim transition-colors">
+                                Pending
+                              </span>
+                            )}
+                          </button>
+                          
+                          <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => handleEdit(item)}
+                              className="p-2 bg-surface-light hover:bg-surface-hover rounded-full text-text-muted hover:text-text-main transition-colors"
+                              title="Edit Task"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => deleteScheduleTask(item.id)}
+                              className="p-2 bg-surface-light hover:bg-accent-primary-dim rounded-full text-text-muted hover:text-accent-primary transition-colors"
+                              title="Delete Task"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     )}
-                    {item.status === 'incomplete' && item.actualHours !== undefined && (
-                      <>
-                        <span className="hidden sm:inline">•</span>
-                        <span className="text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-md border border-red-500/20">{item.actualHours}h completed (Incomplete)</span>
-                      </>
-                    )}
-                  </div>
-                </div>
+                  </Draggable>
+                ))}
+                {provided.placeholder}
               </div>
-              
-              <div className="flex items-center justify-between md:justify-end gap-3 mt-3 md:mt-0 w-full md:w-auto">
-                <button 
-                  onClick={() => toggleStatus(item.id, item.status)}
-                  className="cursor-pointer shrink-0"
-                >
-                  {item.status === 'completed' && (
-                    <span className="flex items-center gap-1 text-emerald-500 text-sm font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                      <CheckCircle2 className="w-4 h-4" /> Completed
-                    </span>
-                  )}
-                  {item.status === 'in-progress' && (
-                    <span className="flex items-center gap-1.5 text-accent-primary text-sm font-medium bg-accent-primary-dim px-3 py-1.5 rounded-full border border-accent-primary-border">
-                      <div className="w-2 h-2 rounded-full bg-accent-primary animate-pulse"></div> In Progress
-                    </span>
-                  )}
-                  {item.status === 'incomplete' && (
-                    <span className="flex items-center gap-1 text-red-500 text-sm font-medium bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20">
-                      <XCircle className="w-4 h-4" /> Incomplete
-                    </span>
-                  )}
-                  {item.status === 'pending' && (
-                    <span className="flex items-center gap-1 text-text-muted text-sm font-medium bg-surface-light px-3 py-1.5 rounded-full hover:bg-surface-hover border border-border-dim transition-colors">
-                      Pending
-                    </span>
-                  )}
-                </button>
-                
-                <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => handleEdit(item)}
-                    className="p-2 bg-surface-light hover:bg-surface-hover rounded-full text-text-muted hover:text-text-main transition-colors"
-                    title="Edit Task"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => deleteScheduleTask(item.id)}
-                    className="p-2 bg-surface-light hover:bg-accent-primary-dim rounded-full text-text-muted hover:text-accent-primary transition-colors"
-                    title="Delete Task"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+            )}
+          </Droppable>
         </div>
-      </div>
+      </DragDropContext>
 
       <div className="mt-12">
         <LiveCalendar />
@@ -483,20 +516,20 @@ export default function Schedule() {
                     placeholder="e.g., Deep Work" 
                     value={newTask.task}
                     onChange={e => setNewTask({...newTask, task: e.target.value})}
-                    className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-text-main focus:outline-none focus:border-accent-primary-border transition-colors"
+                    className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-[16px] text-text-main focus:outline-none focus:border-accent-primary-border transition-colors"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4">
                   <div>
+                    <label className="block text-[10px] uppercase font-bold text-text-muted mb-1 tracking-wider">Start Time</label>
                     <CustomTimePicker 
-                      label="Start Time"
                       value={newTask.timeStart}
                       onChange={(val) => setNewTask({...newTask, timeStart: val})}
                     />
                   </div>
                   <div>
+                    <label className="block text-[10px] uppercase font-bold text-text-muted mb-1 tracking-wider">End Time</label>
                     <CustomTimePicker 
-                      label="End Time"
                       value={newTask.timeEnd}
                       onChange={(val) => setNewTask({...newTask, timeEnd: val})}
                     />
@@ -507,7 +540,7 @@ export default function Schedule() {
                   <select 
                     value={newTask.category}
                     onChange={e => setNewTask({...newTask, category: e.target.value})}
-                    className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-text-main focus:outline-none focus:border-accent-primary-border transition-colors appearance-none"
+                    className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-[16px] text-text-main focus:outline-none focus:border-accent-primary-border transition-colors appearance-none"
                   >
                     {categories.map(c => <option key={c.name} value={c.name} className="bg-surface text-text-main">{c.name}</option>)}
                   </select>

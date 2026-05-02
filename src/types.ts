@@ -5,8 +5,8 @@ export interface ScheduleItem {
   task: string;
   category: string;
   status: 'pending' | 'in-progress' | 'completed' | 'incomplete';
-  actualHours?: number;
-  excuse?: string;
+  actualHours?: number | null;
+  excuse?: string | null;
 }
 
 export interface SavedSchedule {

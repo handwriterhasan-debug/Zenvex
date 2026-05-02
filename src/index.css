@@ -369,81 +369,10 @@ body, html {
 }
 
 @media (max-width: 1080px) {
-  /* Font size overrides */
-  h1, h2, h3, h4, h5, h6 {
-    font-size: 22px !important;
-    line-height: 1.2 !important;
-  }
-  
-  p, div, span, li {
-    font-size: 14px;
-  }
-  
-  label, .text-xs, .text-\[10px\], .text-sm {
-    font-size: 12px !important;
-  }
-  
-  /* All cards full width with proper padding */
-  .bg-surface, .bg-surface-light, .bg-\[\#0a0a0a\] {
-    width: 100% !important;
-    border-radius: 16px !important;
-    padding: 16px !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    box-sizing: border-box !important;
-  }
-  
-  /* All buttons full width, 48px height, 12px borders */
-  button, .button, a[role="button"], [role="button"]:not(.nav-link) {
-    width: 100% !important;
-    min-height: 48px !important;
-    height: auto !important;
-    border-radius: 12px !important;
-  }
-
-  /* Exclude special icons/buttons from full width */
-  header button, 
-  .discipline-wrapper button, 
-  .calendar-grid button,
-  button[title], 
-  nav button, 
-  nav a, 
-  .icon-btn,
-  .recharts-wrapper button,
-  input[type="checkbox"] + button,
-  .sidebar button {
-    width: auto !important;
-    min-height: auto !important;
-  }
-  
-  /* Compact calendar cells */
-  .calendar-grid {
-    gap: 4px !important;
-  }
-  
-  .calendar-grid > button {
-    width: 28px !important;
-    height: 28px !important;
-    padding: 0 !important;
-    font-size: 10px !important;
-    min-height: auto !important;
-    border-radius: 6px !important;
-  }
-  
   /* Fix horizontal scrolling and spacing */
   html, body {
     overflow-x: hidden !important;
   }
-  
-  #main-scroll-container, main {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
-    gap: 16px !important;
-  }
-  
-  /* Sidebar handling */
-  aside {
-    display: none !important;
-  }
 }
+
 

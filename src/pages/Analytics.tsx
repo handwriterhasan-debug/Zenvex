@@ -97,7 +97,7 @@ export default function Analytics() {
   filteredData.forEach(day => {
     (day.schedule || []).forEach(s => {
       if (s.status === 'completed' || s.status === 'incomplete') {
-        const hours = s.actualHours !== undefined ? Number(s.actualHours) : calculateHoursHelper(s.timeStart, s.timeEnd);
+        const hours = s.actualHours != null ? Number(s.actualHours) : calculateHoursHelper(s.timeStart, s.timeEnd);
         categoryTime[s.category] = (categoryTime[s.category] || 0) + hours;
         totalTime += hours;
       }
@@ -192,7 +192,7 @@ export default function Analytics() {
 
   const totalWorkHours = filteredData.reduce((acc, day) => {
     return acc + (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').reduce((sum, curr) => {
-      if (curr.actualHours !== undefined) {
+      if (curr.actualHours != null) {
         return sum + Number(curr.actualHours);
       }
       return sum + calculateHours(curr.timeStart, curr.timeEnd);

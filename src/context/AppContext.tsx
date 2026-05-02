@@ -11,6 +11,7 @@ interface AppContextType extends AppState {
   applySubscription: (plan: 'Free' | 'Pro' | 'Premium', durationDays: number, coupon?: string) => void;
   addSchedule: (item: ScheduleItem) => void;
   updateSchedule: (id: string, updates: Partial<ScheduleItem>) => void;
+  reorderSchedule: (startIndex: number, endIndex: number) => void;
   clearSchedule: () => void;
   clearExpenses: () => void;
   undoSchedule: () => void;
@@ -205,7 +206,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // Load from Supabase
         const currentLogicalDate = getLogicalDate(defaultSettings.dayEndTime);
         const loadedData = await supabaseService.loadUserData(session.user.id);
-        
+
         if (loadedData) {
           const isNewUser = (!loadedData.profile || !loadedData.settings) && !loadedData.hasError;
           const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
@@ -354,6 +355,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
           }
           
+          const date = currentLogicalDate;
+          const orderJson = localStorage.getItem(`zenvex_schedule_order_${date}`);
+          if (orderJson) {
+            try {
+              const order = JSON.parse(orderJson) as string[];
+              loadedState.currentDayData.schedule.sort((a, b) => {
+                let idxA = order.indexOf(a.id);
+                let idxB = order.indexOf(b.id);
+                if (idxA === -1) idxA = 9999;
+                if (idxB === -1) idxB = 9999;
+                if (idxA !== idxB) return idxA - idxB;
+                return a.timeStart.localeCompare(b.timeStart);
+              });
+            } catch (e) {}
+          } else {
+            loadedState.currentDayData.schedule.sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+          }
+
           setState(prev => ({ ...loadedState, exchangeRatesCache: prev.exchangeRatesCache || loadedState.exchangeRatesCache }));
         }
       } catch (err: any) {
@@ -462,27 +481,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       if (prev.currentDayData.date !== currentLogicalDate) {
-        // Day has changed! Archive current day to history
-        const newHistory = [...prev.history, prev.currentDayData];
+        // Day has changed! Archive current day to history, but check if we already have data for the new date
+        // First, update or add the current day into history
+        const existingHistoryIdx = prev.history.findIndex(h => h.date === prev.currentDayData.date);
+        let newHistory = [...prev.history];
+        if (existingHistoryIdx !== -1) {
+          newHistory[existingHistoryIdx] = prev.currentDayData;
+        } else {
+          newHistory.push(prev.currentDayData);
+        }
+
+        // Now, extract or initialize the new current day
+        const existingNewDayIdx = newHistory.findIndex(h => h.date === currentLogicalDate);
+        let newCurrentDayData: DailyData;
         
-        // Reset current day data, but keep habits (reset completion)
-        const newHabits = prev.currentDayData.habits.map(h => ({
-          ...h,
-          completedToday: false,
-          // If it was completed yesterday, streak is maintained, else it resets
-          streak: h.completedToday ? h.streak : 0 
-        }));
+        if (existingNewDayIdx !== -1) {
+          newCurrentDayData = newHistory[existingNewDayIdx];
+          newHistory.splice(existingNewDayIdx, 1);
+        } else {
+          // Initialize a clean start for the new day
+          // Keep habits but reset completion
+          const newHabits = prev.currentDayData.habits.map(h => ({
+            ...h,
+            completedToday: false,
+            // If it was completed yesterday (or the previous active day), streak is maintained, else it resets
+            streak: h.completedToday ? h.streak : 0 
+          }));
+
+          newCurrentDayData = {
+            date: currentLogicalDate,
+            schedule: [],
+            habits: newHabits,
+            expenses: [],
+            notes: [],
+          };
+        }
 
         nextState = {
           ...nextState,
           history: newHistory,
-          currentDayData: {
-            date: currentLogicalDate,
-            schedule: [], // Reset schedule
-            habits: newHabits, // Keep habits but reset completion
-            expenses: [], // Reset expenses
-            notes: [], // Reset notes
-          }
+          currentDayData: newCurrentDayData
         };
         hasChanges = true;
       }
@@ -645,13 +683,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     let date = '';
     setState(prev => {
       date = prev.currentDayData.date;
+      const newSchedule = [...prev.currentDayData.schedule, item];
+      
+      const orderJson = localStorage.getItem(`zenvex_schedule_order_${date}`);
+      if (orderJson) {
+        try {
+          const order = JSON.parse(orderJson) as string[];
+          newSchedule.sort((a, b) => {
+            let idxA = order.indexOf(a.id);
+            let idxB = order.indexOf(b.id);
+            if (idxA === -1) idxA = 9999;
+            if (idxB === -1) idxB = 9999;
+            if (idxA !== idxB) return idxA - idxB;
+            return a.timeStart.localeCompare(b.timeStart);
+          });
+        } catch (e) {}
+      } else {
+        newSchedule.sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+      }
+
       return {
         ...prev,
-        currentDayData: { ...prev.currentDayData, schedule: [...prev.currentDayData.schedule, item] }
+        currentDayData: { ...prev.currentDayData, schedule: newSchedule }
       };
     });
     const { data: { session } } = await supabase.auth.getSession();
     if (session) await supabaseService.createSchedule(session.user.id, date, item);
+  };
+
+  const reorderSchedule = (startIndex: number, endIndex: number) => {
+    setState(prev => {
+      const newSchedule = Array.from(prev.currentDayData.schedule);
+      const [removed] = newSchedule.splice(startIndex, 1);
+      newSchedule.splice(endIndex, 0, removed);
+      
+      // Save order to localStorage
+      const order = newSchedule.map(s => s.id);
+      localStorage.setItem(`zenvex_schedule_order_${prev.currentDayData.date}`, JSON.stringify(order));
+
+      return {
+        ...prev,
+        currentDayData: {
+          ...prev.currentDayData,
+          schedule: newSchedule
+        }
+      };
+    });
   };
 
   const updateDisciplineScore = async (stateData: AppState) => {
@@ -713,6 +790,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           schedule: prev.currentDayData.schedule.map(s => s.id === id ? { ...s, ...updates } : s)
         }
       };
+
+      const date = prev.currentDayData.date;
+      const orderJson = localStorage.getItem(`zenvex_schedule_order_${date}`);
+      if (orderJson) {
+        try {
+          const order = JSON.parse(orderJson) as string[];
+          newState.currentDayData.schedule.sort((a, b) => {
+            let idxA = order.indexOf(a.id);
+            let idxB = order.indexOf(b.id);
+            if (idxA === -1) idxA = 9999;
+            if (idxB === -1) idxB = 9999;
+            if (idxA !== idxB) return idxA - idxB;
+            return a.timeStart.localeCompare(b.timeStart);
+          });
+        } catch (e) {}
+      } else {
+        newState.currentDayData.schedule.sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+      }
+
       return newState;
     });
     
@@ -1079,6 +1175,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       applySubscription,
       addSchedule,
       updateSchedule,
+      reorderSchedule,
       clearSchedule,
       clearExpenses,
       undoSchedule,

@@ -44,7 +44,7 @@ export function NotificationPanel() {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="fixed sm:absolute top-16 sm:top-full left-4 right-4 sm:left-auto sm:right-0 sm:mt-2 sm:w-96 max-w-[calc(100vw-2rem)] sm:max-w-[384px] bg-surface border border-border-dim rounded-2xl shadow-2xl overflow-hidden z-[100]"
+              className="fixed sm:absolute top-16 sm:top-full left-4 right-4 sm:left-auto sm:right-0 sm:mt-2 w-auto sm:w-[384px] min-w-[320px] max-w-[calc(100vw-2rem)] sm:max-w-none bg-surface border border-border-dim rounded-2xl shadow-2xl overflow-hidden z-[100]"
             >
               <div className="p-4 border-b border-border-dim flex items-center justify-between bg-surface-light">
                 <h3 className="font-bold text-text-main flex items-center gap-2">

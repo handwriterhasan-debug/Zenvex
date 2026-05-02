@@ -6,7 +6,7 @@ export const supabaseService = {
     // We wrap each fetch in a try/catch or use an array of promises with .catch() to prevent a single missing table from failing the entire load.
     const safeFetch = async (query: any) => {
       try {
-        const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 5000));
+        const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 30000));
         return await Promise.race([query, timeoutPromise]);
       } catch (e: any) {
         if (e.message !== 'Query timeout') {
@@ -20,13 +20,13 @@ export const supabaseService = {
       safeFetch(supabase.from('profiles').select('*').eq('id', userId).maybeSingle()),
       safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle()),
       safeFetch(supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle()),
-      safeFetch(supabase.from('schedules').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('schedules').select('*').eq('user_id', userId).order('created_at', { ascending: true })),
+      safeFetch(supabase.from('habits').select('*').eq('user_id', userId).order('created_at', { ascending: true })),
       safeFetch(supabase.from('habit_logs').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('expenses').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('notes').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('saved_schedules').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('notifications').select('*').eq('user_id', userId))
+      safeFetch(supabase.from('expenses').select('*').eq('user_id', userId).order('timestamp', { ascending: true })),
+      safeFetch(supabase.from('notes').select('*').eq('user_id', userId).order('timestamp', { ascending: true })),
+      safeFetch(supabase.from('saved_schedules').select('*').eq('user_id', userId).order('created_at', { ascending: true })),
+      safeFetch(supabase.from('notifications').select('*').eq('user_id', userId).order('timestamp', { ascending: false }))
     ]);
 
     const hasError = fetches.some(f => f.error != null);
@@ -69,7 +69,7 @@ export const supabaseService = {
           status: s.status,
           actualHours: s.actual_hours,
           excuse: s.excuse
-        })),
+        })).sort((a, b) => a.timeStart.localeCompare(b.timeStart)),
         habits: (habits || []).map(h => {
           const log = (habitLogs || []).find(l => l.habit_id === h.id && l.completed_date === date);
           return {
@@ -175,8 +175,8 @@ export const supabaseService = {
     if (updates.task !== undefined) dbUpdates.task = updates.task;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.actualHours !== undefined) dbUpdates.actual_hours = updates.actualHours;
-    if (updates.excuse !== undefined) dbUpdates.excuse = updates.excuse;
+    if ('actualHours' in updates) dbUpdates.actual_hours = updates.actualHours === undefined ? null : updates.actualHours;
+    if ('excuse' in updates) dbUpdates.excuse = updates.excuse === undefined ? null : updates.excuse;
 
     const { data, error } = await supabase.from('schedules').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;

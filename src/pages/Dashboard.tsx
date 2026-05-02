@@ -98,7 +98,7 @@ export default function Dashboard() {
       totalPlannedHours += plannedHours;
       
       if (curr.status === 'completed' || curr.status === 'incomplete') {
-        const hours = curr.actualHours !== undefined ? Number(curr.actualHours) : plannedHours;
+        const hours = curr.actualHours != null ? Number(curr.actualHours) : plannedHours;
         totalCompletedHours += hours;
         const cat = curr.category || 'Uncategorized';
         hoursByCategory[cat] = (hoursByCategory[cat] || 0) + hours;
@@ -187,7 +187,7 @@ export default function Dashboard() {
 
       let dHours = 0;
       (day.schedule || []).filter(s => (s.status === 'completed' || s.status === 'incomplete') && s.category === 'Work').forEach(curr => {
-        dHours += curr.actualHours !== undefined ? Number(curr.actualHours) : calculateHours(curr.timeStart, curr.timeEnd);
+        dHours += curr.actualHours != null ? Number(curr.actualHours) : calculateHours(curr.timeStart, curr.timeEnd);
       });
 
       const dExpenses = (day.expenses || []).filter(e => e.type === 'expense').reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
@@ -302,9 +302,9 @@ export default function Dashboard() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3, duration: 0.5 }}
             style={{ overflow: 'visible', border: 'none', outline: 'none' }}
-            className="flex flex-row lg:flex-col gap-[12px] relative shrink-0 w-full md:w-auto items-center justify-center lg:items-start mt-2 lg:mt-0"
+            className="flex flex-col md:flex-row lg:flex-col gap-4 relative shrink-0 w-full md:w-auto items-center justify-center lg:items-start mt-4 lg:mt-0"
           >
-            <div className="discipline-wrapper border-none outline-none w-[160px] h-[160px] md:w-48 md:h-48 lg:w-64 lg:h-64 mx-0 shrink-0 relative overflow-visible rounded-full">
+            <div className="discipline-wrapper border-none outline-none w-32 h-32 md:w-48 md:h-48 lg:w-64 lg:h-64 mx-auto md:mx-0 shrink-0 relative overflow-visible rounded-full">
               <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100" style={{ overflow: 'visible', border: 'none', outline: 'none' }}>
                 <defs>
                   <filter id="neon-glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -384,7 +384,7 @@ export default function Dashboard() {
                     (schedule || []).map((t, i) => (
                       <div key={i} className="flex items-center gap-2 py-0.5">
                         <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-blue-500' : t.status === 'incomplete' ? 'bg-red-500' : 'bg-gray-600'}`} />
-                        <span className="text-[11px] sm:text-xs text-text-main truncate flex-1 leading-tight">{t.title}</span>
+                        <span className="text-[11px] sm:text-xs text-text-main truncate flex-1 leading-tight">{t.task}</span>
                         <span className="text-[9px] sm:text-[10px] text-text-muted shrink-0 bg-surface px-1.5 py-0.5 rounded border border-border-dim">
                           {t.status === 'completed' ? 'Done' : t.status === 'incomplete' ? 'Missed' : 'Open'}
                         </span>

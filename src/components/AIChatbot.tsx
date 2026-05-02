@@ -493,7 +493,7 @@ Assistant:`;
           width: '52px',
           height: '52px',
           borderRadius: '50%',
-          bottom: '80px',
+          bottom: '100px',
           right: '20px',
           boxShadow: '0 4px 16px rgba(0,0,0,0.35)'
         }}

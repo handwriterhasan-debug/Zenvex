@@ -1,18 +1,36 @@
 import { motion } from 'motion/react';
 import { useAppContext } from '../context/AppContext';
 import { useState } from 'react';
-import { Save, AlertCircle } from 'lucide-react';
+import { Save, AlertCircle, Download, Upload, Keyboard } from 'lucide-react';
 
 export default function Settings() {
-  const { userSettings, updateSettings, isDemoMode, disableDemoMode } = useAppContext();
+  const { userSettings, updateSettings, isDemoMode, disableDemoMode, currentDayData, history } = useAppContext();
   const [name, setName] = useState(userSettings.name);
   const [dayEndTime, setDayEndTime] = useState(userSettings.dayEndTime);
   const [saved, setSaved] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const handleSave = () => {
     updateSettings({ name, dayEndTime });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const exportData = () => {
+    const data = {
+      userSettings,
+      currentDayData,
+      history
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zenvex_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -44,48 +62,100 @@ export default function Settings() {
         </div>
       )}
 
-      <div className="bg-surface border border-border-dim rounded-3xl p-6 max-w-2xl shadow-sm">
-        <h2 className="text-xl font-bold font-display mb-6 text-text-main">Profile & Preferences</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
+          <h2 className="text-xl font-bold font-display mb-6 text-text-main">Profile & Preferences</h2>
         
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-text-muted mb-2">Your Name</label>
-            <input 
-              type="text" 
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-text-main focus:outline-none focus:border-accent-primary transition-colors"
-              placeholder="Enter your name"
-            />
-          </div>
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-text-muted mb-2">Your Name</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-text-main focus:outline-none focus:border-accent-primary transition-colors"
+                placeholder="Enter your name"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-text-muted mb-2">Day End Time</label>
-            <p className="text-xs text-text-faint mb-3">
-              When does your day actually end? If you work late into the night (e.g., until 4 AM), set this to 04:00 so your habits and schedule don't reset at midnight.
+            <div>
+              <label className="block text-sm font-medium text-text-muted mb-2">Day End Time</label>
+              <p className="text-xs text-text-faint mb-3">
+                When does your day actually end? If you work late into the night (e.g., until 4 AM), set this to 04:00 so your habits and schedule don't reset at midnight.
+              </p>
+              <input 
+                type="time" 
+                value={dayEndTime}
+                onChange={(e) => setDayEndTime(e.target.value)}
+                className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-text-main focus:outline-none focus:border-accent-primary transition-colors"
+              />
+            </div>
+
+            <div className="pt-4 border-t border-border-dim flex flex-col sm:flex-row items-center justify-between gap-4">
+              {saved ? (
+                <span className="text-emerald-500 text-sm font-medium flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+                  <Save className="w-4 h-4" /> Settings saved!
+                </span>
+              ) : (
+                <span className="hidden sm:inline"></span>
+              )}
+              <button 
+                onClick={handleSave}
+                className="w-full sm:w-auto justify-center bg-accent-primary hover:bg-accent-primary-hover text-white px-6 py-3 sm:py-2 rounded-xl font-medium transition-colors flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" /> Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
+            <h2 className="text-xl font-bold font-display mb-6 text-text-main flex items-center gap-2">
+              <Download className="w-5 h-5" /> Data & Export
+            </h2>
+            <p className="text-sm text-text-muted mb-6">
+              Download all your local data as a JSON file. This is useful for backups or moving to another device (if not using cloud sync).
             </p>
-            <input 
-              type="time" 
-              value={dayEndTime}
-              onChange={(e) => setDayEndTime(e.target.value)}
-              className="w-full bg-surface-light border border-border-dim rounded-xl px-4 py-3 text-text-main focus:outline-none focus:border-accent-primary transition-colors"
-            />
+            <button 
+              onClick={exportData}
+              className="w-full justify-center bg-surface-light border border-border-dim hover:bg-white/5 text-text-main px-6 py-3 rounded-xl font-medium transition-colors flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" /> Export Backup
+            </button>
           </div>
 
-          <div className="pt-4 border-t border-border-dim flex flex-col sm:flex-row items-center justify-between gap-4">
-            {saved ? (
-              <span className="text-emerald-500 text-sm font-medium flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
-                <Save className="w-4 h-4" /> Settings saved!
-              </span>
-            ) : (
-              <span className="hidden sm:inline"></span>
-            )}
+          <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm">
+            <h2 className="text-xl font-bold font-display mb-6 text-text-main flex items-center gap-2">
+              <Keyboard className="w-5 h-5" /> Keyboard Shortcuts
+            </h2>
+            <p className="text-sm text-text-muted mb-6">
+              Navigate Zenvex faster using these global keyboard shortcuts (anywhere outside input fields).
+            </p>
             <button 
-              onClick={handleSave}
-              className="w-full sm:w-auto justify-center bg-accent-primary hover:bg-accent-primary-hover text-white px-6 py-3 sm:py-2 rounded-xl font-medium transition-colors flex items-center gap-2"
+              onClick={() => setShowShortcuts(!showShortcuts)}
+              className="w-full justify-center bg-surface-light border border-border-dim hover:bg-white/5 text-text-main px-6 py-3 rounded-xl font-medium transition-colors flex items-center gap-2"
             >
-              <Save className="w-4 h-4" /> Save Changes
+              <Keyboard className="w-4 h-4" /> {showShortcuts ? 'Hide Shortcuts' : 'Show Shortcuts'}
             </button>
+
+            {showShortcuts && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mt-4 grid grid-cols-2 gap-2 text-sm text-text-muted"
+              >
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">D</kbd> Dashboard</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">S</kbd> Schedule</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">H</kbd> Habits</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">E</kbd> Expenses</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">N</kbd> Notes</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">C</kbd> Currency</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">A</kbd> Analytics</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">Y</kbd> History</div>
+                <div className="bg-surface-light p-2 rounded-lg flex justify-between items-center"><kbd className="bg-black border border-border-dim px-2 py-0.5 rounded text-xs font-mono">T</kbd> Toggle Timer</div>
+              </motion.div>
+            )}
           </div>
         </div>
       </div>
