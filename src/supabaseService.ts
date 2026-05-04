@@ -62,7 +62,7 @@ export const supabaseService = {
     // Parse habits back into HabitItems
     const parsedHabits = habits.map(h => {
       const meta = h.metadata || {};
-      const dates = h.completed_dates || [];
+      const dates = meta.completed_dates || [];
       
       const sortedDates = [...dates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
       
@@ -270,15 +270,15 @@ export const supabaseService = {
       id: item.id,
       user_id: userId,
       name: item.name,
-      frequency: item.target.toString(),
-      streak: item.streak || 0,
-      completed_dates: [],
       metadata: {
         category: item.category,
         target: item.target,
         color: item.color,
         startDate: item.startDate,
-        is_active: true
+        is_active: true,
+        frequency: item.target.toString(),
+        streak: item.streak || 0,
+        completed_dates: []
       }
     }).select().single();
     if (error) {
@@ -295,12 +295,12 @@ export const supabaseService = {
     const { data: existing } = await supabase.from('habits').select('metadata').eq('id', id).single();
     const existingMeta = existing?.metadata || {};
     
-    if (updates.target !== undefined) dbUpdates.frequency = updates.target.toString();
-
     const newMeta = { ...existingMeta };
+    if (updates.target !== undefined) newMeta.frequency = updates.target.toString();
     if (updates.category !== undefined) newMeta.category = updates.category;
     if (updates.target !== undefined) newMeta.target = updates.target;
     if (updates.color !== undefined) newMeta.color = updates.color;
+    if (updates.streak !== undefined) newMeta.streak = updates.streak;
     dbUpdates.metadata = newMeta;
 
     const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
@@ -320,11 +320,12 @@ export const supabaseService = {
   },
 
   async upsertHabitLog(userId: string, habitId: string, date: string, completed: boolean) {
-    const { data: existing } = await supabase.from('habits').select('completed_dates, streak').eq('id', habitId).single();
+    const { data: existing } = await supabase.from('habits').select('metadata').eq('id', habitId).single();
     if (!existing) return;
 
-    let dates = existing.completed_dates || [];
-    let streak = existing.streak || 0;
+    const meta = existing.metadata || {};
+    let dates = meta.completed_dates || [];
+    let streak = meta.streak || 0;
 
     if (completed && !dates.includes(date)) {
       dates.push(date);
@@ -335,8 +336,7 @@ export const supabaseService = {
     }
 
     const { data, error } = await supabase.from('habits').update({
-      completed_dates: dates,
-      streak: streak
+      metadata: { ...meta, completed_dates: dates, streak: streak }
     }).eq('id', habitId).select().single();
 
     if (error) throw error;
