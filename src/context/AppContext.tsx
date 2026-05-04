@@ -234,7 +234,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 // Check if completed yesterday
                 const yesterday = new Date(currentLogicalDate);
                 yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
                 const completedYesterday = loadedData.history.some(day => day.date === yesterdayStr && day.habits.some(dh => dh.id === h.id && dh.completedToday));
                 
                 return {
@@ -1025,8 +1025,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const { data: { session } } = await supabase.auth.getSession();
     if (session && targetDate) {
-      await supabaseService.upsertHabitLog(session.user.id, id, targetDate, isCompleted);
-      await supabaseService.updateHabit(id, { streak: newStreak });
+      try {
+        await supabaseService.upsertHabitLog(session.user.id, id, targetDate, isCompleted);
+        await supabaseService.updateHabit(id, { streak: newStreak });
+      } catch (err: any) {
+        setSyncError("Failed to update habit: " + err.message);
+        console.error("Habit toggle error:", err);
+      }
     }
     if (newState) await updateDisciplineScore(newState);
   };
