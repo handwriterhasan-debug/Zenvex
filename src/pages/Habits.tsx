@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Flame, Target, Trophy, CheckCircle2, Edit2, X, Trash2, Activity } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export default function Habits() {
@@ -48,7 +48,7 @@ export default function Habits() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (newHabit.name) {
       if (editingId) {
         updateHabit(editingId, {
@@ -78,7 +78,7 @@ export default function Habits() {
   };
 
   const handleEdit = (habit: any) => {
-    setNewHabit({ name: habit.name, category: habit.category, target: habit.target });
+    setNewHabit({ name: habit.name, category: habit.category || 'Fitness', target: habit.target || 30 });
     setEditingId(habit.id);
     setIsAdding(true);
   };
@@ -90,15 +90,16 @@ export default function Habits() {
   };
 
   // Calculate stats
-  const longestStreak = Math.max(0, ...habits.map(h => h.streak));
+  const longestStreak = habits.length > 0 ? Math.max(0, ...habits.map((h: any) => h.streak || 0)) : 0;
   
   // Calculate overall completion rate across all habits and history
   let totalPossible = habits.length;
-  let totalCompleted = habits.filter(h => h.completedToday).length;
+  // Compute completed today directly from completions
+  let totalCompleted = habits.filter((h: any) => h.completedToday).length;
   
   history.forEach(day => {
     totalPossible += (day.habits || []).length;
-    totalCompleted += (day.habits || []).filter(h => h.completedToday).length;
+    totalCompleted += (day.habits || []).filter((h: any) => h.completedToday).length;
   });
   
   const completionRate = totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0;
@@ -129,16 +130,14 @@ export default function Habits() {
       const isPast = d < currentDateObj;
 
       let completed = false;
-      let exists = false;
-
+      let exists = true; // since it calculates from start date forward
+      
       if (isToday) {
         completed = habit.completedToday;
-        exists = true;
       } else if (isPast) {
         const historyDay = history.find(h => h.date === dateStr);
-        const habitInHistory = (historyDay?.habits || []).find(h => h.id === habit.id);
+        const habitInHistory = (historyDay?.habits || []).find((h: any) => h.id === habit.id);
         completed = habitInHistory ? habitInHistory.completedToday : false;
-        exists = !!habitInHistory;
       }
 
       calendar.push({
@@ -154,11 +153,11 @@ export default function Habits() {
     return calendar;
   };
 
-  const handleToggle = (habit: any, dateStr?: string) => {
+  const handleToggle = async (habit: any, dateStr?: string) => {
     const calendar = generateCalendar(habit);
-    const currentlyCompleted = calendar.filter(d => d.completed).length;
+    const currentlyCompleted = calendar.filter((d: any) => d.completed).length;
     
-    const targetDay = calendar.find(d => d.dateStr === (dateStr || currentDayData.date));
+    const targetDay = calendar.find((d: any) => d.dateStr === (dateStr || currentDayData.date));
     const willBeCompleted = targetDay ? !targetDay.completed : false;
     
     const newCompletedCount = currentlyCompleted + (willBeCompleted ? 1 : -1);
@@ -166,7 +165,7 @@ export default function Habits() {
     toggleHabit(habit.id, dateStr);
 
     if (newCompletedCount === habit.target && willBeCompleted) {
-      const daysPassed = calendar.filter(d => d.isPast || d.isToday).length;
+      const daysPassed = calendar.filter((d: any) => d.isPast || d.isToday).length;
       const score = Math.round((newCompletedCount / habit.target) * 100);
       const discipline = daysPassed === habit.target ? "Perfect" : daysPassed < habit.target * 1.2 ? "Excellent" : "Good";
       
@@ -180,7 +179,7 @@ export default function Habits() {
   };
 
   const habitChartData = [...history.slice(-6), currentDayData].map(day => {
-    const completed = (day.habits || []).filter(h => h.completedToday).length;
+    const completed = (day.habits || []).filter((h: any) => h.completedToday).length;
     const total = (day.habits || []).length;
     const dateObj = new Date(day.date);
     return {
@@ -316,7 +315,7 @@ export default function Habits() {
                   <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm text-text-muted mt-1 md:mt-1.5 font-medium">
                     <span className="bg-white/5 px-2 py-0.5 md:px-2.5 md:py-1 rounded-md">{habit.category}</span>
                     <span className="flex items-center gap-1 md:gap-1.5 text-accent-primary bg-accent-primary-dim px-2 py-0.5 md:px-2.5 md:py-1 rounded-md">
-                      <Flame className="w-3 md:w-3.5 h-3 md:h-3.5" /> {habit.streak} day streak
+                      <Flame className="w-3 md:w-3.5 h-3 md:h-3.5" /> {habit.streak || 0} day streak
                     </span>
                   </div>
                 </div>
@@ -330,7 +329,7 @@ export default function Habits() {
                 <button 
                   onClick={() => handleToggle(habit)}
                   className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-xl md:rounded-2xl border transition-all flex items-center justify-center text-xl md:text-2xl ${
-                    habit.completedToday 
+                    habit.completedToday
                       ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]' 
                       : 'bg-black/40 border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 opacity-50 grayscale hover:grayscale-0 hover:opacity-100'
                   }`}

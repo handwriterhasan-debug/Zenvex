@@ -449,7 +449,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!isStateLoaded) return;
 
-    localStorage.setItem('makeYourFutureState', JSON.stringify(state));
+    const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
+    if (isGuestMode) {
+      localStorage.setItem('makeYourFutureState', JSON.stringify(state));
+    }
     
     // Apply theme to body and html
     if (state.userSettings.theme === 'light') {
