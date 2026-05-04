@@ -19,6 +19,7 @@ export const supabaseService = {
       safeFetch(supabase.from('profile').select('*').eq('id', userId).maybeSingle()),
       safeFetch(supabase.from('tasks').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('habit_completions').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('expenses').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('notes').select('*').eq('user_id', userId))
     ]);
@@ -29,6 +30,7 @@ export const supabaseService = {
       { data: profileRow },
       { data: tasksRow },
       { data: habitsRow },
+      { data: completionsRow },
       { data: expensesRow },
       { data: notesRow }
     ] = fetches;
@@ -39,7 +41,8 @@ export const supabaseService = {
 
     const schedules: any[] = tasksRow || [];
     // Only include active habits OR habits without is_active defined
-    const habits: any[] = (habitsRow || []).filter(h => h.metadata?.is_active !== false);
+    const habits: any[] = (habitsRow || []).filter(h => h.is_active !== false && h.metadata?.is_active !== false);
+    const habitCompletions: any[] = completionsRow || [];
     const expenses: any[] = expensesRow || [];
     const notes: any[] = notesRow || [];
 
@@ -52,7 +55,7 @@ export const supabaseService = {
         timeStart: meta.timeStart || '',
         timeEnd: meta.timeEnd || '',
         task: s.title,
-        category: meta.category || '',
+        category: meta.category || s.category || '',
         status: s.status,
         actualHours: meta.actualHours,
         excuse: meta.excuse
@@ -62,7 +65,7 @@ export const supabaseService = {
     // Parse habits back into HabitItems
     const parsedHabits = habits.map(h => {
       const meta = h.metadata || {};
-      const dates = meta.completed_dates || [];
+      const dates = h.completed_dates || meta.completed_dates || habitCompletions.filter((c: any) => c.habit_id === h.id).map((c: any) => c.completed_date) || [];
       
       const sortedDates = [...dates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
       
@@ -266,7 +269,7 @@ export const supabaseService = {
   },
 
   async createHabit(userId: string, item: HabitItem) {
-    const { data, error } = await supabase.from('habits').insert({
+    const payloadNew: any = {
       id: item.id,
       user_id: userId,
       name: item.name,
@@ -280,21 +283,55 @@ export const supabaseService = {
         streak: item.streak || 0,
         completed_dates: []
       }
-    }).select().single();
-    if (error) {
-       console.error("Habit create error", error);
-       throw error;
+    };
+
+    let result = await supabase.from('habits').insert(payloadNew).select().single();
+
+    if (result.error && (result.error.message.includes('Could not find the') || result.error.message.includes('column'))) {
+      const payloadOld: any = {
+        id: item.id,
+        user_id: userId,
+        name: item.name,
+        is_active: true,
+        category: item.category,
+        target: item.target,
+        color: item.color,
+        created_at: new Date().toISOString()
+      };
+      result = await supabase.from('habits').insert(payloadOld).select().single();
     }
-    return data;
+
+    if (result.error) {
+       console.error("Habit create error", result.error);
+       throw result.error;
+    }
+    return result.data;
   },
 
   async updateHabit(id: string, updates: Partial<HabitItem>) {
+    const { data: existing, error: fetchErr } = await supabase.from('habits').select('metadata').eq('id', id).single();
+    
+    // If metadata column doesn't exist, we must use old schema updates!
+    if (fetchErr && (fetchErr.message.includes('Could not find the') || fetchErr.message.includes('column'))) {
+      const dbUpdates: any = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.target !== undefined) dbUpdates.target = updates.target;
+      if (updates.color !== undefined) dbUpdates.color = updates.color;
+      
+      const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
+      if (error) {
+         console.error("Habit update error (old schema)", error);
+         throw error;
+      }
+      return data;
+    }
+
+    const existingMeta = existing?.metadata || {};
+    
     const dbUpdates: any = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
 
-    const { data: existing } = await supabase.from('habits').select('metadata').eq('id', id).single();
-    const existingMeta = existing?.metadata || {};
-    
     const newMeta = { ...existingMeta };
     if (updates.target !== undefined) newMeta.frequency = updates.target.toString();
     if (updates.category !== undefined) newMeta.category = updates.category;
@@ -305,14 +342,21 @@ export const supabaseService = {
 
     const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
     if (error) {
-       console.error("Habit update error", error);
+       console.error("Habit update error (new schema)", error);
        throw error;
     }
     return data;
   },
 
   async deleteHabit(id: string) {
-    const { data: existing } = await supabase.from('habits').select('metadata').eq('id', id).single();
+    const { data: existing, error: fetchErr } = await supabase.from('habits').select('metadata').eq('id', id).single();
+    
+    if (fetchErr && (fetchErr.message.includes('Could not find the') || fetchErr.message.includes('column'))) {
+      const { error } = await supabase.from('habits').update({ is_active: false }).eq('id', id);
+      if (error) throw error;
+      return;
+    }
+
     const existingMeta = existing?.metadata || {};
     const newMeta = { ...existingMeta, is_active: false };
     const { error } = await supabase.from('habits').update({ metadata: newMeta }).eq('id', id);
@@ -320,7 +364,22 @@ export const supabaseService = {
   },
 
   async upsertHabitLog(userId: string, habitId: string, date: string, completed: boolean) {
-    const { data: existing } = await supabase.from('habits').select('metadata').eq('id', habitId).single();
+    const { data: existing, error: fetchErr } = await supabase.from('habits').select('metadata').eq('id', habitId).single();
+    if (fetchErr && (fetchErr.message.includes('Could not find the') || fetchErr.message.includes('column'))) {
+      // old schema
+      if (completed) {
+        return await supabase.from('habit_completions').insert({
+          habit_id: habitId,
+          user_id: userId,
+          completed_date: date
+        });
+      } else {
+        return await supabase.from('habit_completions').delete()
+          .eq('habit_id', habitId)
+          .eq('completed_date', date);
+      }
+    }
+
     if (!existing) return;
 
     const meta = existing.metadata || {};
