@@ -540,21 +540,32 @@ Assistant:`;
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0a0a0a]/50">
+              <div 
+                className="flex-1 p-4 space-y-4 bg-[#0a0a0a]/50"
+                style={{ overflowY: 'auto', maxHeight: '400px' }}
+              >
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div 
-                      className={`max-w-[85%] px-4 py-3 text-[14px] leading-relaxed ${
-                        msg.role === 'user' 
-                          ? 'bg-accent-primary text-[#1A1A1A] font-medium' 
-                          : 'bg-[#222] text-white border border-[#333]'
-                      }`}
-                      style={{ borderRadius: '16px' }}
+                      style={{ 
+                        color: '#FFFFFF',
+                        backgroundColor: msg.role === 'user' ? '#1a1a1a' : '#111111',
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        width: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        overflow: 'visible',
+                        fontSize: '14px',
+                        lineHeight: '1.5',
+                        wordBreak: 'break-word',
+                        whiteSpace: 'pre-wrap'
+                      }}
                     >
                       {msg.role === 'user' ? (
                         msg.content
                       ) : (
-                        <div className="prose prose-invert prose-sm max-w-none text-[14px] leading-relaxed">
+                        <div className="prose prose-invert prose-sm max-w-none" style={{ color: '#FFFFFF', fontSize: '14px', lineHeight: '1.5', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
                           <Markdown>{msg.content}</Markdown>
                         </div>
                       )}
@@ -600,7 +611,18 @@ Assistant:`;
                     placeholder="Ask your tutor..."
                     maxLength={1000}
                     rows={1}
-                    className="flex-1 bg-[#111] border border-[#333] rounded-full px-5 py-3 text-[14px] text-white focus:outline-none focus:border-accent-primary transition-colors resize-none min-h-[44px] max-h-[120px] overflow-y-auto"
+                    className="bg-[#111] border border-[#333] text-[14px] text-white focus:outline-none focus:border-accent-primary transition-colors resize-none min-h-[44px] max-h-[120px]"
+                    style={{
+                      borderRadius: '12px',
+                      width: '100%',
+                      maxWidth: '100%',
+                      padding: '12px 16px',
+                      boxSizing: 'border-box',
+                      overflow: 'visible',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      flex: 1
+                    }}
                   />
                   <button 
                     type="submit"
