@@ -281,17 +281,34 @@ export const supabaseService = {
         target: item.target,
         color: item.color,
         startDate: item.startDate,
-        is_active: true
+        is_active: true,
+        frequency: item.target.toString(),
+        streak: item.streak || 0,
+        completed_dates: []
       }
     };
 
-    const { data, error } = await supabase.from('habits').insert(payload).select().single();
-
-    if (error) {
-       console.error("Habit create error", error);
-       throw error;
+    let result = await supabase.from('habits').insert(payload).select().single();
+    
+    // Auto-fallback if the schema in Vercel environment doesn't have the new columns
+    let retries = 0;
+    while (result.error && (result.error.message.includes('Could not find the') || result.error.message.includes('column')) && retries < 5) {
+      const match = result.error.message.match(/'([^']+)' column/);
+      if (match && match[1]) {
+        const col = match[1];
+        delete (payload as any)[col];
+        result = await supabase.from('habits').insert(payload).select().single();
+        retries++;
+      } else {
+        break;
+      }
     }
-    return data;
+
+    if (result.error) {
+       console.error("Habit create error", result.error);
+       throw result.error;
+    }
+    return result.data;
   },
 
   async updateHabit(id: string, updates: Partial<HabitItem>) {
@@ -307,14 +324,31 @@ export const supabaseService = {
     if (updates.category !== undefined) newMeta.category = updates.category;
     if (updates.target !== undefined) newMeta.target = updates.target;
     if (updates.color !== undefined) newMeta.color = updates.color;
+    // ensure we also store them in metadata for older schemas
+    if (updates.target !== undefined) newMeta.frequency = updates.target.toString();
+    if (updates.streak !== undefined) newMeta.streak = updates.streak;
     dbUpdates.metadata = newMeta;
 
-    const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
-    if (error) {
-       console.error("Habit update error", error);
-       throw error;
+    let result = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
+    
+    let retries = 0;
+    while (result.error && (result.error.message.includes('Could not find the') || result.error.message.includes('column')) && retries < 5) {
+      const match = result.error.message.match(/'([^']+)' column/);
+      if (match && match[1]) {
+        const col = match[1];
+        delete dbUpdates[col];
+        result = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
+        retries++;
+      } else {
+        break;
+      }
     }
-    return data;
+
+    if (result.error) {
+       console.error("Habit update error", result.error);
+       throw result.error;
+    }
+    return result.data;
   },
 
   async deleteHabit(id: string) {
@@ -342,14 +376,29 @@ export const supabaseService = {
       streak = Math.max(0, streak - 1);
     }
 
-    const { data, error } = await supabase.from('habits').update({
+    const payload: any = {
       completed_dates: dates,
       streak: streak,
       metadata: { ...meta, completed_dates: dates, streak: streak } // keep in sync in metadata just in case
-    }).eq('id', habitId).select().single();
+    };
 
-    if (error) throw error;
-    return data;
+    let result = await supabase.from('habits').update(payload).eq('id', habitId).select().single();
+    
+    let retries = 0;
+    while (result.error && (result.error.message.includes('Could not find the') || result.error.message.includes('column')) && retries < 5) {
+      const match = result.error.message.match(/'([^']+)' column/);
+      if (match && match[1]) {
+        const col = match[1];
+        delete payload[col];
+        result = await supabase.from('habits').update(payload).eq('id', habitId).select().single();
+        retries++;
+      } else {
+        break;
+      }
+    }
+
+    if (result.error) throw result.error;
+    return result.data;
   },
 
   async createExpense(userId: string, date: string, item: ExpenseItem) {
