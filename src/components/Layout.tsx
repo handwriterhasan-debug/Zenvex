@@ -400,9 +400,12 @@ export default function Layout() {
               <span className="w-2.5 h-2.5 rounded-full bg-accent-primary shadow-[0_0_8px_var(--accent-primary)]"></span>
               <span className="hidden sm:inline">Zenvex</span>
             </NavLink>
-            <div className="flex items-center shrink-0">
+            <div className="flex items-center shrink-0 gap-2">
               <span className="px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white rounded-md shadow-sm">
                 Beta
+              </span>
+              <span className="px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold uppercase tracking-wider bg-purple-600 text-white rounded-md shadow-sm">
+                MVP Version
               </span>
             </div>
           </div>
