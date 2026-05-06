@@ -22,7 +22,6 @@ export default function Schedule() {
     excuse: ''
   });
 
-  const [completedTaskAnim, setCompletedTaskAnim] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -160,18 +159,12 @@ export default function Schedule() {
         return;
       }
 
-      const isCompleted = actualHours >= plannedHours;
       updateSchedule(completionModal.taskId, { 
-        status: isCompleted ? 'completed' : 'incomplete',
+        status: actualHours < plannedHours ? 'incomplete' : 'completed',
         actualHours,
         excuse: completionModal.excuse
       });
       setCompletionModal({ isOpen: false, taskId: null, actualHours: '', excuse: '' });
-      
-      if (isCompleted) {
-        setCompletedTaskAnim(true);
-        setTimeout(() => setCompletedTaskAnim(false), 2000);
-      }
     }
   };
 
@@ -768,22 +761,6 @@ export default function Schedule() {
                   Yes, I'm Sure
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {completedTaskAnim && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1.2, opacity: 1 }}
-              exit={{ scale: 1.5, opacity: 0 }}
-              transition={{ duration: 0.5, type: 'spring' }}
-              className="bg-emerald-500/20 p-8 rounded-full shadow-[0_0_80px_rgba(16,185,129,0.4)] backdrop-blur-md"
-            >
-              <CheckCircle2 className="w-32 h-32 text-emerald-400" />
             </motion.div>
           </div>
         )}

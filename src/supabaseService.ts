@@ -19,7 +19,6 @@ export const supabaseService = {
       safeFetch(supabase.from('profile').select('*').eq('id', userId).maybeSingle()),
       safeFetch(supabase.from('tasks').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('habit_completions').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('expenses').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('notes').select('*').eq('user_id', userId))
     ]);
@@ -30,7 +29,6 @@ export const supabaseService = {
       { data: profileRow },
       { data: tasksRow },
       { data: habitsRow },
-      { data: completionsRow },
       { data: expensesRow },
       { data: notesRow }
     ] = fetches;
@@ -40,9 +38,7 @@ export const supabaseService = {
     const metadata = actualProfile.metadata || {};
 
     const schedules: any[] = tasksRow || [];
-    // Only include active habits OR habits without is_active defined
-    const habits: any[] = (habitsRow || []).filter(h => h.is_active !== false && h.metadata?.is_active !== false);
-    const habitCompletions: any[] = completionsRow || [];
+    const habits: any[] = habitsRow || [];
     const expenses: any[] = expensesRow || [];
     const notes: any[] = notesRow || [];
 
@@ -55,7 +51,7 @@ export const supabaseService = {
         timeStart: meta.timeStart || '',
         timeEnd: meta.timeEnd || '',
         task: s.title,
-        category: meta.category || s.category || '',
+        category: meta.category || '',
         status: s.status,
         actualHours: meta.actualHours,
         excuse: meta.excuse
@@ -65,45 +61,16 @@ export const supabaseService = {
     // Parse habits back into HabitItems
     const parsedHabits = habits.map(h => {
       const meta = h.metadata || {};
-      const dates = h.completed_dates || meta.completed_dates || habitCompletions.filter((c: any) => c.habit_id === h.id).map((c: any) => c.completed_date) || [];
-      
-      const sortedDates = [...dates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-      
-      let streak = 0;
-      // Generate today and yesterday using local timezone so it matches user's getLogicalDate output
-      const today = new Date();
-      const formatLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const dToday = formatLocal(today);
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const dYesterday = formatLocal(yesterday);
-      
-      const dOptions = [dToday, dYesterday];
-      let currentDate = sortedDates.includes(dOptions[0]) ? dOptions[0] : (sortedDates.includes(dOptions[1]) ? dOptions[1] : null);
-      
-      if (currentDate) {
-        for (const date of sortedDates) {
-          if (date === currentDate) {
-            streak++;
-            const prev = new Date(currentDate);
-            prev.setDate(prev.getDate() - 1);
-            currentDate = prev.toISOString().split('T')[0];
-          } else {
-            break;
-          }
-        }
-      }
-
       return {
         id: h.id,
         name: h.name,
-        category: meta.category || 'Fitness',
-        target: meta.target || 30,
-        color: meta.color || 'bg-blue-500',
-        startDate: meta.startDate || (h.created_at || '').split('T')[0],
+        category: meta.category || '',
+        target: meta.target || 7,
+        color: meta.color || '#10b981',
+        startDate: meta.startDate || h.created_at,
         completedToday: false, // Computed below
-        streak: streak,
-        completed_dates: dates
+        streak: h.streak || 0,
+        completed_dates: h.completed_dates || []
       };
     });
 
@@ -242,7 +209,7 @@ export const supabaseService = {
 
   async updateSchedule(id: string, updates: Partial<ScheduleItem>) {
     // First fetch existing to merge metadata
-    const { data: existing } = await supabase.from('tasks').select('*').eq('id', id).single();
+    const { data: existing } = await supabase.from('tasks').select('metadata').eq('id', id).single();
     const existingMeta = existing?.metadata || {};
 
     const dbUpdates: any = {};
@@ -269,7 +236,7 @@ export const supabaseService = {
   },
 
   async createHabit(userId: string, item: HabitItem) {
-    const payload = {
+    const { data, error } = await supabase.from('habits').insert({
       id: item.id,
       user_id: userId,
       name: item.name,
@@ -280,93 +247,44 @@ export const supabaseService = {
         category: item.category,
         target: item.target,
         color: item.color,
-        startDate: item.startDate,
-        is_active: true,
-        frequency: item.target.toString(),
-        streak: item.streak || 0,
-        completed_dates: []
+        startDate: item.startDate
       }
-    };
-
-    let result = await supabase.from('habits').insert(payload).select().single();
-    
-    // Auto-fallback if the schema in Vercel environment doesn't have the new columns
-    let retries = 0;
-    while (result.error && (result.error.message.includes('Could not find the') || result.error.message.includes('column')) && retries < 5) {
-      const match = result.error.message.match(/'([^']+)' column/);
-      if (match && match[1]) {
-        const col = match[1];
-        delete (payload as any)[col];
-        result = await supabase.from('habits').insert(payload).select().single();
-        retries++;
-      } else {
-        break;
-      }
-    }
-
-    if (result.error) {
-       console.error("Habit create error", result.error);
-       throw result.error;
-    }
-    return result.data;
+    }).select().single();
+    if (error) throw error;
+    return data;
   },
 
   async updateHabit(id: string, updates: Partial<HabitItem>) {
-    const { data: existing } = await supabase.from('habits').select('*').eq('id', id).maybeSingle();
+    const { data: existing } = await supabase.from('habits').select('metadata, completed_dates').eq('id', id).single();
     const existingMeta = existing?.metadata || {};
-    
+
     const dbUpdates: any = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.target !== undefined) dbUpdates.frequency = updates.target.toString();
     if (updates.streak !== undefined) dbUpdates.streak = updates.streak;
+    if (updates.target !== undefined) dbUpdates.frequency = updates.target.toString();
 
     const newMeta = { ...existingMeta };
     if (updates.category !== undefined) newMeta.category = updates.category;
     if (updates.target !== undefined) newMeta.target = updates.target;
     if (updates.color !== undefined) newMeta.color = updates.color;
-    // ensure we also store them in metadata for older schemas
-    if (updates.target !== undefined) newMeta.frequency = updates.target.toString();
-    if (updates.streak !== undefined) newMeta.streak = updates.streak;
     dbUpdates.metadata = newMeta;
 
-    let result = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
-    
-    let retries = 0;
-    while (result.error && (result.error.message.includes('Could not find the') || result.error.message.includes('column')) && retries < 5) {
-      const match = result.error.message.match(/'([^']+)' column/);
-      if (match && match[1]) {
-        const col = match[1];
-        delete dbUpdates[col];
-        result = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
-        retries++;
-      } else {
-        break;
-      }
-    }
-
-    if (result.error) {
-       console.error("Habit update error", result.error);
-       throw result.error;
-    }
-    return result.data;
+    const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   async deleteHabit(id: string) {
-    const { data: existing } = await supabase.from('habits').select('*').eq('id', id).maybeSingle();
-    const existingMeta = existing?.metadata || {};
-    const newMeta = { ...existingMeta, is_active: false };
-    
-    const { error } = await supabase.from('habits').update({ metadata: newMeta }).eq('id', id);
+    const { error } = await supabase.from('habits').delete().eq('id', id);
     if (error) throw error;
   },
 
   async upsertHabitLog(userId: string, habitId: string, date: string, completed: boolean) {
-    const { data: existing } = await supabase.from('habits').select('*').eq('id', habitId).maybeSingle();
+    const { data: existing } = await supabase.from('habits').select('completed_dates, streak').eq('id', habitId).single();
     if (!existing) return;
 
-    const meta = existing.metadata || {};
-    let dates = existing.completed_dates || meta.completed_dates || [];
-    let streak = existing.streak || meta.streak || 0;
+    let dates = existing.completed_dates || [];
+    let streak = existing.streak || 0;
 
     if (completed && !dates.includes(date)) {
       dates.push(date);
@@ -376,29 +294,13 @@ export const supabaseService = {
       streak = Math.max(0, streak - 1);
     }
 
-    const payload: any = {
+    const { data, error } = await supabase.from('habits').update({
       completed_dates: dates,
-      streak: streak,
-      metadata: { ...meta, completed_dates: dates, streak: streak } // keep in sync in metadata just in case
-    };
+      streak: streak
+    }).eq('id', habitId).select().single();
 
-    let result = await supabase.from('habits').update(payload).eq('id', habitId).select().single();
-    
-    let retries = 0;
-    while (result.error && (result.error.message.includes('Could not find the') || result.error.message.includes('column')) && retries < 5) {
-      const match = result.error.message.match(/'([^']+)' column/);
-      if (match && match[1]) {
-        const col = match[1];
-        delete payload[col];
-        result = await supabase.from('habits').update(payload).eq('id', habitId).select().single();
-        retries++;
-      } else {
-        break;
-      }
-    }
-
-    if (result.error) throw result.error;
-    return result.data;
+    if (error) throw error;
+    return data;
   },
 
   async createExpense(userId: string, date: string, item: ExpenseItem) {
@@ -421,7 +323,7 @@ export const supabaseService = {
   },
 
   async updateExpense(id: string, updates: Partial<ExpenseItem>) {
-    const { data: existing } = await supabase.from('expenses').select('*').eq('id', id).single();
+    const { data: existing } = await supabase.from('expenses').select('metadata').eq('id', id).single();
     const existingMeta = existing?.metadata || {};
 
     const dbUpdates: any = {};
@@ -469,7 +371,7 @@ export const supabaseService = {
   },
 
   async updateProfile(userId: string, updates: Partial<UserProfile>) {
-    const { data: existing } = await supabase.from('profile').select('*').eq('id', userId).single();
+    const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
     const existingMeta = existing?.metadata || {};
     
     const dbUpdates: any = {};
@@ -512,14 +414,14 @@ export const supabaseService = {
   },
 
   async updateNotifications(userId: string, notifications: unknown[]) {
-    const { data: existing } = await supabase.from('profile').select('*').eq('id', userId).single();
+    const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
     const newMeta = { ...(existing?.metadata || {}), notifications };
     const { error } = await supabase.from('profile').update({ metadata: newMeta }).eq('id', userId);
     if (error) throw error;
   },
 
   async updateSavedSchedules(userId: string, schedules: unknown[]) {
-     const { data: existing } = await supabase.from('profile').select('*').eq('id', userId).single();
+     const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
      const newMeta = { ...(existing?.metadata || {}), savedSchedules: schedules };
      const { error } = await supabase.from('profile').update({ metadata: newMeta }).eq('id', userId);
      if (error) throw error;

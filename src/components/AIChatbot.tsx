@@ -547,25 +547,23 @@ Assistant:`;
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div 
+                      className="max-w-[85%]"
                       style={{ 
                         color: '#FFFFFF',
                         backgroundColor: msg.role === 'user' ? '#1a1a1a' : '#111111',
                         padding: '12px 16px',
-                        borderRadius: '12px',
-                        width: '100%',
-                        maxWidth: '100%',
-                        boxSizing: 'border-box',
-                        overflow: 'visible',
+                        borderRadius: '18px',
                         fontSize: '14px',
                         lineHeight: '1.5',
-                        wordBreak: 'break-word',
+                        wordWrap: 'break-word',
+                        overflowWrap: 'break-word',
                         whiteSpace: 'pre-wrap'
                       }}
                     >
                       {msg.role === 'user' ? (
                         msg.content
                       ) : (
-                        <div className="prose prose-invert prose-sm max-w-none" style={{ color: '#FFFFFF', fontSize: '14px', lineHeight: '1.5', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                        <div className="prose prose-invert prose-sm max-w-none" style={{ color: '#FFFFFF', fontSize: '14px', lineHeight: '1.5', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
                           <Markdown>{msg.content}</Markdown>
                         </div>
                       )}
@@ -611,18 +609,7 @@ Assistant:`;
                     placeholder="Ask your tutor..."
                     maxLength={1000}
                     rows={1}
-                    className="bg-[#111] border border-[#333] text-[14px] text-white focus:outline-none focus:border-accent-primary transition-colors resize-none min-h-[44px] max-h-[120px]"
-                    style={{
-                      borderRadius: '12px',
-                      width: '100%',
-                      maxWidth: '100%',
-                      padding: '12px 16px',
-                      boxSizing: 'border-box',
-                      overflow: 'visible',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      flex: 1
-                    }}
+                    className="flex-1 bg-[#111] border border-[#333] rounded-full px-5 py-3 text-[14px] text-white focus:outline-none focus:border-accent-primary transition-colors resize-none min-h-[44px] max-h-[120px] overflow-y-auto"
                   />
                   <button 
                     type="submit"
