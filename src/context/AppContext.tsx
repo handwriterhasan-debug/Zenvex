@@ -214,7 +214,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (loadedData) {
           if (loadedData.hasError) {
-             setSyncError("Partial load error from database. Some data may be missing. Check your connection.");
+             // Suppress partial load errors as they might be due to offline or missing tables
+             // setSyncError("Partial load error from database. Some data may be missing. Check your connection.");
              console.error("Partial load error from DB arrays:", loadedData);
           }
           

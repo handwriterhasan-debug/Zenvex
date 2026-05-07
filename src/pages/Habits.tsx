@@ -288,58 +288,54 @@ export default function Habits() {
           </div>
         ) : habits.map((habit, i) => (
           <div key={`${habit.id}-${i}`} className="bg-surface border border-border-dim rounded-2xl md:rounded-3xl p-4 md:p-6 relative group shadow-sm hover:border-accent-primary-border transition-all">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-6 md:mb-8">
-              <div className="flex items-center gap-4 md:gap-5 pr-16 md:pr-0">
+            <div className="absolute top-3 right-3 md:top-4 md:right-4 flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
+              <button 
+                onClick={() => handleEdit(habit)}
+                className="p-2 bg-surface border border-border-dim hover:bg-surface-hover rounded-xl text-text-muted hover:text-text-main transition-all shadow-sm"
+                title="Edit Habit"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => deleteHabit(habit.id)}
+                className="p-2 bg-surface border border-border-dim hover:border-red-500/30 hover:bg-red-500/10 rounded-xl text-text-muted hover:text-red-500 transition-all shadow-sm"
+                title="Delete Habit"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex items-center justify-between gap-4 md:gap-6 mb-6 md:mb-8 pt-6 sm:pt-0">
+              <div className="flex items-center gap-3 md:gap-5 min-w-0">
                 <div className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl bg-surface-light border border-border-dim flex items-center justify-center font-display font-bold text-xl md:text-2xl ${habit.color.replace('bg-', 'text-').replace('500', '500')}`}>
                   {habit.name.charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-lg md:text-xl font-bold tracking-tight truncate text-text-main">{habit.name}</h3>
-                  <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm text-text-muted mt-1 md:mt-1.5 font-medium">
-                    <span className="bg-white/5 px-2 py-0.5 md:px-2.5 md:py-1 rounded-md">{habit.category}</span>
-                    <span className="flex items-center gap-1 md:gap-1.5 text-accent-primary bg-accent-primary-dim px-2 py-0.5 md:px-2.5 md:py-1 rounded-md">
-                      <Flame className="w-3 md:w-3.5 h-3 md:h-3.5" /> {habit.streak || 0} day streak
+                  <h3 className="text-base md:text-xl font-bold tracking-tight truncate text-text-main pr-2">{habit.name}</h3>
+                  <div className="flex flex-wrap items-center gap-2 md:gap-2.5 text-xs md:text-sm text-text-muted mt-1.5 font-medium">
+                    <span className="bg-white/5 border border-white/10 px-2 py-0.5 md:px-2 md:py-1 rounded-md shrink-0">{habit.category}</span>
+                    <span className={`flex items-center gap-1 px-2 py-0.5 md:px-2 md:py-1 rounded-md shrink-0 ${habit.streak > 0 ? 'text-accent-primary bg-accent-primary-dim' : 'text-red-500 bg-red-500/10'}`}>
+                      <Flame className="w-3 h-3 md:w-3.5 md:h-3.5" /> {habit.streak || 0} day streak
+                    </span>
+                    <span className="flex items-center gap-1 text-blue-400 bg-blue-500/10 px-2 py-0.5 md:px-2 md:py-1 rounded-md shrink-0">
+                      <Target className="w-3 h-3 md:w-3.5 md:h-3.5" /> {habit.target} target
                     </span>
                   </div>
                 </div>
               </div>
               
-              <div className="flex items-center justify-between md:justify-end gap-4 md:gap-6 w-full md:w-auto">
-                <div className="text-left md:text-right flex items-center md:block gap-2 md:gap-0">
-                  <div className="text-xs md:text-sm text-gray-500 md:mb-1 font-medium">Target:</div>
-                  <div className="font-mono font-bold text-base md:text-lg">{habit.target} <span className="text-xs md:text-sm text-gray-500 font-sans font-normal">Days</span></div>
-                </div>
-                
-                <div className="flex items-center gap-2 md:gap-3">
-                  <div className="flex items-center gap-1 md:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => handleEdit(habit)}
-                      className="p-2 md:p-2.5 bg-surface-light border border-border-dim hover:bg-surface-hover rounded-xl text-text-muted hover:text-text-main transition-all shadow-sm"
-                      title="Edit Habit"
-                    >
-                      <Edit2 className="w-4 h-4 md:w-5 md:h-5" />
-                    </button>
-                    <button 
-                      onClick={() => deleteHabit(habit.id)}
-                      className="p-2 md:p-2.5 bg-surface-light border border-border-dim hover:border-red-500/30 hover:bg-red-500/10 rounded-xl text-text-muted hover:text-red-500 transition-all shadow-sm"
-                      title="Delete Habit"
-                    >
-                      <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
-                    </button>
-                  </div>
-
-                  <button 
-                    onClick={() => handleToggle(habit)}
-                    className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-xl md:rounded-2xl border transition-all flex items-center justify-center text-xl md:text-2xl ${
-                      habit.completedToday
-                        ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]' 
-                        : 'bg-black/40 border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 opacity-50 grayscale hover:grayscale-0 hover:opacity-100'
-                    }`}
-                    title={habit.completedToday ? "Mark as incomplete" : "Mark as complete"}
-                  >
-                    {getCategoryEmoji(habit.category)}
-                  </button>
-                </div>
+              <div className="flex items-center shrink-0">
+                <button 
+                  onClick={() => handleToggle(habit)}
+                  className={`w-14 h-14 md:w-16 md:h-16 shrink-0 rounded-2xl border transition-all flex items-center justify-center text-2xl md:text-3xl shadow-sm ${
+                    habit.completedToday
+                      ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]' 
+                      : 'bg-surface-light border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 opacity-60 grayscale hover:grayscale-0 hover:opacity-100'
+                  }`}
+                  title={habit.completedToday ? "Mark as incomplete" : "Mark as complete"}
+                >
+                  {getCategoryEmoji(habit.category)}
+                </button>
               </div>
             </div>
 
@@ -352,7 +348,7 @@ export default function Habits() {
                 } else if (day.isFuture) {
                   stateClass = 'bg-black/20 text-gray-700 border-white/5 opacity-50 cursor-not-allowed';
                 } else if (day.isPast) {
-                  stateClass = 'bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]';
+                  stateClass = 'bg-red-500/20 text-red-500 border-red-500/50 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.3)]';
                 } else {
                   stateClass = 'bg-black/40 text-gray-400 border-white/10 hover:border-white/20';
                 }
