@@ -288,23 +288,6 @@ export default function Habits() {
           </div>
         ) : habits.map((habit, i) => (
           <div key={`${habit.id}-${i}`} className="bg-surface border border-border-dim rounded-2xl md:rounded-3xl p-4 md:p-6 relative group shadow-sm hover:border-accent-primary-border transition-all">
-            <div className="absolute top-4 right-4 md:top-6 md:right-6 flex items-center gap-1 md:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              <button 
-                onClick={() => handleEdit(habit)}
-                className="p-1.5 md:p-2 bg-surface-light hover:bg-surface-hover rounded-lg md:rounded-xl text-text-muted hover:text-text-main transition-colors"
-                title="Edit Habit"
-              >
-                <Edit2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              </button>
-              <button 
-                onClick={() => deleteHabit(habit.id)}
-                className="p-1.5 md:p-2 bg-surface-light hover:bg-accent-primary-dim rounded-lg md:rounded-xl text-text-muted hover:text-accent-primary transition-colors"
-                title="Delete Habit"
-              >
-                <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              </button>
-            </div>
-            
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-6 md:mb-8">
               <div className="flex items-center gap-4 md:gap-5 pr-16 md:pr-0">
                 <div className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl bg-surface-light border border-border-dim flex items-center justify-center font-display font-bold text-xl md:text-2xl ${habit.color.replace('bg-', 'text-').replace('500', '500')}`}>
@@ -326,17 +309,37 @@ export default function Habits() {
                   <div className="text-xs md:text-sm text-gray-500 md:mb-1 font-medium">Target:</div>
                   <div className="font-mono font-bold text-base md:text-lg">{habit.target} <span className="text-xs md:text-sm text-gray-500 font-sans font-normal">Days</span></div>
                 </div>
-                <button 
-                  onClick={() => handleToggle(habit)}
-                  className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-xl md:rounded-2xl border transition-all flex items-center justify-center text-xl md:text-2xl ${
-                    habit.completedToday
-                      ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]' 
-                      : 'bg-black/40 border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 opacity-50 grayscale hover:grayscale-0 hover:opacity-100'
-                  }`}
-                  title={habit.completedToday ? "Mark as incomplete" : "Mark as complete"}
-                >
-                  {getCategoryEmoji(habit.category)}
-                </button>
+                
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="flex items-center gap-1 md:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => handleEdit(habit)}
+                      className="p-2 md:p-2.5 bg-surface-light border border-border-dim hover:bg-surface-hover rounded-xl text-text-muted hover:text-text-main transition-all shadow-sm"
+                      title="Edit Habit"
+                    >
+                      <Edit2 className="w-4 h-4 md:w-5 md:h-5" />
+                    </button>
+                    <button 
+                      onClick={() => deleteHabit(habit.id)}
+                      className="p-2 md:p-2.5 bg-surface-light border border-border-dim hover:border-red-500/30 hover:bg-red-500/10 rounded-xl text-text-muted hover:text-red-500 transition-all shadow-sm"
+                      title="Delete Habit"
+                    >
+                      <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                    </button>
+                  </div>
+
+                  <button 
+                    onClick={() => handleToggle(habit)}
+                    className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-xl md:rounded-2xl border transition-all flex items-center justify-center text-xl md:text-2xl ${
+                      habit.completedToday
+                        ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]' 
+                        : 'bg-black/40 border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 opacity-50 grayscale hover:grayscale-0 hover:opacity-100'
+                    }`}
+                    title={habit.completedToday ? "Mark as incomplete" : "Mark as complete"}
+                  >
+                    {getCategoryEmoji(habit.category)}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -349,7 +352,7 @@ export default function Habits() {
                 } else if (day.isFuture) {
                   stateClass = 'bg-black/20 text-gray-700 border-white/5 opacity-50 cursor-not-allowed';
                 } else if (day.isPast) {
-                  stateClass = 'bg-accent-primary-dim text-accent-primary border-accent-primary-border hover:bg-accent-primary-dim';
+                  stateClass = 'bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]';
                 } else {
                   stateClass = 'bg-black/40 text-gray-400 border-white/10 hover:border-white/20';
                 }
