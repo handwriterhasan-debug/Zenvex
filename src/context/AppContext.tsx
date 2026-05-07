@@ -174,6 +174,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   useEffect(() => {
+    let currentUserIdTracker: string | null = null;
+    
     const loadState = async () => {
       try {
         // Check Supabase session with a timeout to prevent hanging
@@ -183,6 +185,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         );
         
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+        
+        if (session) {
+            currentUserIdTracker = session.user.id;
+        }
         
         if (!session) {
           const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
@@ -204,10 +210,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         // Load from Supabase
-        const currentLogicalDate = getLogicalDate(defaultSettings.dayEndTime);
         const loadedData = await supabaseService.loadUserData(session.user.id);
 
         if (loadedData) {
+          if (loadedData.hasError) {
+             setSyncError("Partial load error from database. Some data may be missing. Check your connection.");
+             console.error("Partial load error from DB arrays:", loadedData);
+          }
+          
           const isNewUser = (!loadedData.profile || !loadedData.settings) && !loadedData.hasError;
           const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
           
@@ -220,35 +230,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               try { localState = JSON.parse(saved); } catch (e) {}
             }
           }
+
+          const resolvedUserSettings = {
+            ...(loadedData.settings || localState?.userSettings || defaultSettings),
+            initialExpenses: localState?.userSettings?.initialExpenses || 0
+          };
           
-          const loadedState: AppState = {
-            userSettings: {
-              ...(loadedData.settings || localState?.userSettings || defaultSettings),
-              initialExpenses: localState?.userSettings?.initialExpenses || 0
-            },
-            userProfile: loadedData.profile || localState?.userProfile || defaultProfile,
-            currentDayData: loadedData.history.find(h => h.date === currentLogicalDate) || localState?.currentDayData || {
+          const currentLogicalDate = getLogicalDate(resolvedUserSettings.dayEndTime || '23:59');
+          
+          const safeArray = (dbArray: any[], localArray: any[] | undefined) => {
+             // For guests and failed loads, prioritize local data if DB returned nothing
+             if ((isGuestMode || loadedData.hasError) && (!dbArray || dbArray.length === 0) && localArray && localArray.length > 0) {
+               return localArray;
+             }
+             return dbArray && dbArray.length > 0 ? dbArray : (localArray || []);
+          };
+
+          // Find day data prioritizing existing local state if DB didn't find anything for today, or if local is richer
+          let baseCurrentDay = loadedData.history.find(h => h.date === currentLogicalDate) || localState?.currentDayData;
+          if (!baseCurrentDay) {
+            baseCurrentDay = {
               date: currentLogicalDate,
               schedule: [],
-              habits: loadedData.habits.map(h => {
-                // Check if completed yesterday
-                const yesterday = new Date(currentLogicalDate);
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = yesterday.toISOString().split('T')[0];
-                const completedYesterday = loadedData.history.some(day => day.date === yesterdayStr && day.habits.some(dh => dh.id === h.id && dh.completedToday));
-                
-                return {
-                  id: h.id, name: h.name, category: h.category, target: h.target,
-                  color: h.color, startDate: h.startDate, completedToday: false, 
-                  streak: completedYesterday ? h.streak : 0
-                };
+              habits: safeArray(loadedData.habits, localState?.currentDayData?.habits).map(h => {
+                return { ...h, completedToday: h.completedToday !== undefined ? h.completedToday : false, streak: h.streak || 0 };
               }),
               expenses: [],
               notes: []
-            },
-            history: loadedData.history.length > 0 ? loadedData.history.filter(h => h.date !== currentLogicalDate) : (localState?.history || []),
-            savedSchedules: loadedData.savedSchedules?.length > 0 ? loadedData.savedSchedules : (localState?.savedSchedules || []),
-            notifications: loadedData.notifications?.length > 0 ? loadedData.notifications : (localState?.notifications || []),
+            };
+          } else if (localState?.currentDayData?.date === currentLogicalDate) {
+            // merge
+            baseCurrentDay = {
+               ...baseCurrentDay,
+               schedule: safeArray(baseCurrentDay.schedule, localState.currentDayData.schedule),
+               habits: safeArray(baseCurrentDay.habits, localState.currentDayData.habits),
+               expenses: safeArray(baseCurrentDay.expenses, localState.currentDayData.expenses),
+               notes: safeArray(baseCurrentDay.notes, localState.currentDayData.notes),
+            };
+          }
+
+          const loadedState: AppState = {
+            userSettings: resolvedUserSettings,
+            userProfile: loadedData.profile || localState?.userProfile || defaultProfile,
+            currentDayData: baseCurrentDay,
+            history: safeArray(loadedData.history, localState?.history).filter(h => h.date !== currentLogicalDate),
+            savedSchedules: safeArray(loadedData.savedSchedules, localState?.savedSchedules),
+            notifications: safeArray(loadedData.notifications, localState?.notifications),
             isDemoMode: false
           };
 
@@ -415,10 +442,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setSyncError(null);
         }
         
-        // Fallback to local storage on error
         try {
-          const saved = localStorage.getItem('makeYourFutureState');
-          if (saved) setState(prev => ({ ...JSON.parse(saved), exchangeRatesCache: prev.exchangeRatesCache }));
+          const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
+          if (isGuestMode) {
+            const saved = localStorage.getItem('makeYourFutureState');
+            if (saved) setState(prev => ({ ...JSON.parse(saved), exchangeRatesCache: prev.exchangeRatesCache }));
+          } else {
+            setSyncError(err.message || 'Failed to sync with cloud. Try refreshing.');
+          }
         } catch (e) {
           console.error('Failed to parse local storage state', e);
         }
@@ -431,8 +462,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
-        loadState();
+        if (session && session.user.id !== currentUserIdTracker) {
+            loadState();
+        }
       } else if (event === 'SIGNED_OUT') {
+        currentUserIdTracker = null;
         localStorage.removeItem('makeYourFutureState');
         setState(defaultState);
       }
@@ -981,24 +1015,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Recalculate streaks
       for (let i = 0; i < allDays.length; i++) {
         const currentDay = allDays[i];
-        const prevDay = i > 0 ? allDays[i - 1] : null;
+        
+        // Find if true 'yesterday' exists to carry over streak
+        const [yYear, yMonthOrig, yDayOrig] = currentDay.date.split('-');
+        const yesterdayObj = new Date(Number(yYear), Number(yMonthOrig) - 1, Number(yDayOrig));
+        yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+        const yMonth = String(yesterdayObj.getMonth() + 1).padStart(2, '0');
+        const yDayNum = String(yesterdayObj.getDate()).padStart(2, '0');
+        const yesterdayStr = `${yesterdayObj.getFullYear()}-${yMonth}-${yDayNum}`;
+        
+        const prevDay = allDays.find(d => d.date === yesterdayStr);
 
-        currentDay.habits = currentDay.habits.map(h => {
-          if (h.id === id) {
-            const prevHabit = prevDay?.habits.find(ph => ph.id === id);
-            const prevStreak = prevHabit ? prevHabit.streak : 0;
-            const updatedStreak = h.completedToday ? prevStreak + 1 : 0;
-            if (currentDay.date === targetDate) {
-              isCompleted = h.completedToday;
-              newStreak = updatedStreak;
+        allDays[i] = {
+          ...currentDay,
+          habits: currentDay.habits.map(h => {
+            if (h.id === id) {
+              const prevHabit = prevDay?.habits.find(ph => ph.id === id);
+              const prevStreak = prevHabit ? prevHabit.streak : 0;
+              
+              const isToday = currentDay.date === prev.currentDayData.date;
+              let updatedStreak = 0;
+              
+              if (h.completedToday) {
+                updatedStreak = prevStreak + 1;
+              } else if (isToday) {
+                // If it's today and not completed yet, retain yesterday's streak
+                updatedStreak = prevStreak;
+              } else {
+                // Past day not completed breaks the streak
+                updatedStreak = 0;
+              }
+
+              if (currentDay.date === targetDate) {
+                isCompleted = h.completedToday;
+                newStreak = updatedStreak; // Keep track of the streak to update in DB
+              }
+              return {
+                ...h,
+                streak: updatedStreak
+              };
             }
-            return {
-              ...h,
-              streak: updatedStreak
-            };
-          }
-          return h;
-        });
+            return h;
+          })
+        };
       }
 
       const newCurrentDayData = allDays.find(d => d.date === prev.currentDayData.date)!;
@@ -1015,6 +1074,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, 0);
       }
 
+      // the streak saved to db should always reflect its latest state correctly
+      if (updatedHabit) {
+        newStreak = updatedHabit.streak;
+      }
+
       newState = {
         ...prev,
         history: newHistory,
@@ -1025,8 +1089,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const { data: { session } } = await supabase.auth.getSession();
     if (session && targetDate) {
-      await supabaseService.upsertHabitLog(session.user.id, id, targetDate, isCompleted);
-      await supabaseService.updateHabit(id, { streak: newStreak });
+      Promise.all([
+        supabaseService.upsertHabitLog(session.user.id, id, targetDate, isCompleted),
+        supabaseService.updateHabit(id, { streak: newStreak })
+      ]).catch(e => setSyncError("Failed to save habit: " + e.message));
     }
     if (newState) await updateDisciplineScore(newState);
   };

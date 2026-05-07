@@ -386,8 +386,13 @@ export default function Expenses() {
               <div className="flex items-center gap-2 mt-2">
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={savingsInput}
-                  onChange={e => setSavingsInput(e.target.value)}
+                  onChange={e => {
+                    if (Number(e.target.value) < 0) return;
+                    setSavingsInput(e.target.value);
+                  }}
                   className="bg-surface-light border border-border-dim rounded-lg px-3 py-1.5 w-full text-text-main focus:outline-none focus:border-blue-500 text-lg"
                   autoFocus
                   onKeyDown={e => e.key === 'Enter' && saveSavings()}
@@ -443,8 +448,13 @@ export default function Expenses() {
               <div className="flex items-center gap-2 mt-2">
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={incomeInput}
-                  onChange={e => setIncomeInput(e.target.value)}
+                  onChange={e => {
+                    if (Number(e.target.value) < 0) return;
+                    setIncomeInput(e.target.value);
+                  }}
                   className="bg-surface-light border border-border-dim rounded-lg px-3 py-1.5 w-full text-text-main focus:outline-none focus:border-emerald-500 text-lg"
                   autoFocus
                   onKeyDown={e => e.key === 'Enter' && saveIncome()}
@@ -748,8 +758,14 @@ export default function Expenses() {
                     <input 
                       type="number" 
                       placeholder="0.00" 
+                      min="0"
+                      step="0.01"
                       value={newExpense.amount}
-                      onChange={e => setNewExpense({...newExpense, amount: e.target.value})}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (Number(val) < 0) return;
+                        setNewExpense({...newExpense, amount: val});
+                      }}
                       className="w-full bg-surface-light border border-border-dim rounded-xl py-3 pl-14 pr-4 text-text-main text-lg font-medium focus:outline-none focus:border-emerald-500/50 transition-colors"
                       autoFocus
                     />

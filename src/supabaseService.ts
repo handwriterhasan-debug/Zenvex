@@ -16,93 +16,100 @@ export const supabaseService = {
     };
 
     const fetches = await Promise.all([
-      safeFetch(supabase.from('profile').select('*').eq('id', userId).maybeSingle()),
-      safeFetch(supabase.from('tasks').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('profiles').select('*').eq('id', userId).maybeSingle()),
+      safeFetch(supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle()),
+      safeFetch(supabase.from('schedules').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('habit_logs').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('expenses').select('*').eq('user_id', userId)),
-      safeFetch(supabase.from('notes').select('*').eq('user_id', userId))
+      safeFetch(supabase.from('notes').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('saved_schedules').select('*').eq('user_id', userId)),
+      safeFetch(supabase.from('notifications').select('*').eq('user_id', userId))
     ]);
 
     const hasError = fetches.some(f => f.error != null);
 
     const [
       { data: profileRow },
-      { data: tasksRow },
+      { data: settingsRow },
+      { data: schedulesRow },
       { data: habitsRow },
+      { data: habitLogsRow },
       { data: expensesRow },
-      { data: notesRow }
+      { data: notesRow },
+      { data: savedSchedulesRow },
+      { data: notificationsRow }
     ] = fetches;
 
     const actualProfile = profileRow || {};
-    const settings = actualProfile.settings || {};
-    const metadata = actualProfile.metadata || {};
+    const settings = settingsRow || {};
 
-    const schedules: any[] = tasksRow || [];
+    const schedules: any[] = schedulesRow || [];
     const habits: any[] = habitsRow || [];
+    const habitLogs: any[] = habitLogsRow || [];
     const expenses: any[] = expensesRow || [];
     const notes: any[] = notesRow || [];
 
-    // Parse tasks back into ScheduleItems
-    const parsedSchedules = schedules.map(s => {
-      const meta = s.metadata || {};
-      return {
-        id: s.id,
-        date: meta.date,
-        timeStart: meta.timeStart || '',
-        timeEnd: meta.timeEnd || '',
-        task: s.title,
-        category: meta.category || '',
-        status: s.status,
-        actualHours: meta.actualHours,
-        excuse: meta.excuse
-      };
-    });
+    // Parse schedules
+    const parsedSchedules = schedules.map(s => ({
+      id: s.id,
+      date: s.date,
+      timeStart: s.time_start || '',
+      timeEnd: s.time_end || '',
+      task: s.task || '',
+      category: s.category || '',
+      status: s.status || 'pending',
+      actualHours: s.actual_hours ? Number(s.actual_hours) : undefined,
+      excuse: s.excuse
+    }));
 
-    // Parse habits back into HabitItems
-    const parsedHabits = habits.map(h => {
-      const meta = h.metadata || {};
+    // Parse habits
+    const defaultColors = ['bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500'];
+    const parsedHabits = habits.map((h, i) => {
+      const logsForHabit = habitLogs.filter(l => l.habit_id === h.id).map(l => l.completed_date);
       return {
         id: h.id,
         name: h.name,
-        category: meta.category || '',
-        target: meta.target || 7,
-        color: meta.color || '#10b981',
-        startDate: meta.startDate || h.created_at,
-        completedToday: false, // Computed below
-        streak: h.streak || 0,
-        completed_dates: h.completed_dates || []
+        category: h.category || 'Fitness',
+        target: h.target_days ? Number(h.target_days) : 7,
+        color: defaultColors[i % defaultColors.length], // Fallback since color isn't in DB
+        startDate: (h.created_at || new Date().toISOString()).split('T')[0],
+        completedToday: false, // Computed below based on date
+        streak: h.streak ? Number(h.streak) : 0,
+        completed_dates: logsForHabit
       };
     });
 
     // Parse expenses
-    const parsedExpenses = expenses.map(e => {
-      const meta = e.metadata || {};
-      return {
-        id: e.id,
-        date: e.date,
-        title: e.description || '', // Mapped title to description in db
-        amount: Number(e.amount),
-        type: meta.type || 'expense',
-        category: e.category || '',
-        customCategory: meta.customCategory,
-        source: meta.source,
-        timestamp: meta.timestamp || e.created_at
-      };
-    });
+    const parsedExpenses = expenses.map(e => ({
+      id: e.id,
+      date: e.date,
+      title: e.title || '',
+      amount: Number(e.amount),
+      type: e.type || 'expense',
+      category: e.category || '',
+      customCategory: e.custom_category,
+      source: e.source,
+      timestamp: e.timestamp || e.created_at
+    }));
 
     // Parse notes
-    const parsedNotes = notes.map(n => {
-      const meta = n.metadata || {};
-      return {
-        id: n.id,
-        date: meta.date,
-        title: n.title || '',
-        content: n.content || '',
-        tags: meta.tags || [],
-        timestamp: meta.timestamp || n.created_at,
-        isExcuse: meta.isExcuse
-      };
-    });
+    const parsedNotes = notes.map(n => ({
+      id: n.id,
+      date: n.date,
+      title: n.title || '',
+      content: n.content || '',
+      tags: n.tags || [],
+      timestamp: n.timestamp || n.created_at,
+      isExcuse: !!n.is_excuse
+    }));
+
+    // Parse templates
+    const savedSchedules = (savedSchedulesRow || []).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      tasks: s.tasks || []
+    }));
 
     // Construct AppState from relational data
     const allDates = new Set([
@@ -133,7 +140,7 @@ export const supabaseService = {
             target: h.target,
             color: h.color,
             startDate: h.startDate,
-            completedToday: h.completed_dates?.includes(date),
+            completedToday: h.completed_dates.includes(date),
             streak: h.streak
           };
         }),
@@ -160,78 +167,65 @@ export const supabaseService = {
 
     return {
       hasError,
-      profile: actualProfile ? {
-        name: actualProfile.username || 'User',
-        gender: metadata.gender || 'Not specified',
-        age: metadata.age || 'Not specified',
-        country: metadata.country || 'Not specified',
-        plan: metadata.plan || 'Free',
-        disciplineScore: metadata.disciplineScore || 0,
+      profile: actualProfile && Object.keys(actualProfile).length > 0 ? {
+        name: actualProfile.name || 'User',
+        gender: actualProfile.gender || 'Not specified',
+        age: actualProfile.age || 'Not specified',
+        country: actualProfile.country || 'Not specified',
+        plan: actualProfile.plan || 'Free',
+        disciplineScore: actualProfile.discipline_score ? Number(actualProfile.discipline_score) : 0,
         avatarUrl: actualProfile.avatar_url
       } : undefined,
-      settings: actualProfile ? {
-        name: actualProfile.username || 'User',
-        dayEndTime: settings.dayEndTime || '23:59',
+      settings: settings && Object.keys(settings).length > 0 ? {
+        name: settings.name || 'User',
+        dayEndTime: settings.day_end_time || '23:59',
         theme: settings.theme || 'dark',
-        initialBalance: settings.initialBalance || 0,
-        savingsBalance: settings.savingsBalance || 0,
-        monthlyIncome: settings.monthlyIncome || 0,
-        currency: settings.currency || 'PKR'
+        initialBalance: settings.initial_balance ? Number(settings.initial_balance) : 0,
+        savingsBalance: settings.savings_balance ? Number(settings.savings_balance) : 0,
+        monthlyIncome: settings.monthly_income ? Number(settings.monthly_income) : 0,
+        currency: settings.currency || 'USD'
       } : undefined,
       history,
       habits: parsedHabits,
-      savedSchedules: metadata.savedSchedules || [],
-      notifications: metadata.notifications || []
+      savedSchedules,
+      notifications: notificationsRow || []
     };
   },
 
   async createSchedule(userId: string, date: string, item: ScheduleItem) {
-    const { data, error } = await supabase.from('tasks').insert({
+    const { data, error } = await supabase.from('schedules').insert({
       id: item.id,
       user_id: userId,
-      title: item.task,
-      description: item.category, // Map category to description
+      date: date,
+      time_start: item.timeStart,
+      time_end: item.timeEnd,
+      task: item.task,
+      category: item.category,
       status: item.status,
-      due_date: new Date().toISOString(),
-      order: 0,
-      metadata: {
-        date,
-        timeStart: item.timeStart,
-        timeEnd: item.timeEnd,
-        category: item.category,
-        actualHours: item.actualHours,
-        excuse: item.excuse
-      }
+      actual_hours: item.actualHours,
+      excuse: item.excuse
     }).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateSchedule(id: string, updates: Partial<ScheduleItem>) {
-    // First fetch existing to merge metadata
-    const { data: existing } = await supabase.from('tasks').select('metadata').eq('id', id).single();
-    const existingMeta = existing?.metadata || {};
-
     const dbUpdates: any = {};
-    if (updates.task !== undefined) dbUpdates.title = updates.task;
-    if (updates.category !== undefined) dbUpdates.description = updates.category;
+    if (updates.task !== undefined) dbUpdates.task = updates.task;
+    if (updates.timeStart !== undefined) dbUpdates.time_start = updates.timeStart;
+    if (updates.timeEnd !== undefined) dbUpdates.time_end = updates.timeEnd;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if ('actualHours' in updates) dbUpdates.actual_hours = updates.actualHours;
+    if ('excuse' in updates) dbUpdates.excuse = updates.excuse;
 
-    const newMeta = { ...existingMeta };
-    if (updates.timeStart !== undefined) newMeta.timeStart = updates.timeStart;
-    if (updates.timeEnd !== undefined) newMeta.timeEnd = updates.timeEnd;
-    if (updates.category !== undefined) newMeta.category = updates.category;
-    if ('actualHours' in updates) newMeta.actualHours = updates.actualHours === undefined ? null : updates.actualHours;
-    if ('excuse' in updates) newMeta.excuse = updates.excuse === undefined ? null : updates.excuse;
-    dbUpdates.metadata = newMeta;
-
-    const { data, error } = await supabase.from('tasks').update(dbUpdates).eq('id', id).select().single();
+    const { data, error } = await supabase.from('schedules').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
 
   async deleteSchedule(id: string) {
-    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    const { error } = await supabase.from('schedules').delete().eq('id', id);
     if (error) throw error;
   },
 
@@ -240,34 +234,22 @@ export const supabaseService = {
       id: item.id,
       user_id: userId,
       name: item.name,
-      frequency: item.target.toString(),
-      streak: item.streak || 0,
-      completed_dates: [],
-      metadata: {
-        category: item.category,
-        target: item.target,
-        color: item.color,
-        startDate: item.startDate
-      }
+      category: item.category,
+      target_days: item.target,
+      streak: item.streak || 0
     }).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateHabit(id: string, updates: Partial<HabitItem>) {
-    const { data: existing } = await supabase.from('habits').select('metadata, completed_dates').eq('id', id).single();
-    const existingMeta = existing?.metadata || {};
-
     const dbUpdates: any = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.streak !== undefined) dbUpdates.streak = updates.streak;
-    if (updates.target !== undefined) dbUpdates.frequency = updates.target.toString();
+    if (updates.target !== undefined) dbUpdates.target_days = updates.target;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
 
-    const newMeta = { ...existingMeta };
-    if (updates.category !== undefined) newMeta.category = updates.category;
-    if (updates.target !== undefined) newMeta.target = updates.target;
-    if (updates.color !== undefined) newMeta.color = updates.color;
-    dbUpdates.metadata = newMeta;
+    if (Object.keys(dbUpdates).length === 0) return null;
 
     const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
@@ -280,63 +262,47 @@ export const supabaseService = {
   },
 
   async upsertHabitLog(userId: string, habitId: string, date: string, completed: boolean) {
-    const { data: existing } = await supabase.from('habits').select('completed_dates, streak').eq('id', habitId).single();
-    if (!existing) return;
-
-    let dates = existing.completed_dates || [];
-    let streak = existing.streak || 0;
-
-    if (completed && !dates.includes(date)) {
-      dates.push(date);
-      streak += 1;
-    } else if (!completed && dates.includes(date)) {
-      dates = dates.filter((d: string) => d !== date);
-      streak = Math.max(0, streak - 1);
+    if (completed) {
+      const { error } = await supabase.from('habit_logs').insert({
+        user_id: userId,
+        habit_id: habitId,
+        completed_date: date
+      });
+      if (error && !error.message.includes('duplicate key')) throw error;
+    } else {
+      const { error } = await supabase.from('habit_logs').delete()
+        .eq('habit_id', habitId)
+        .eq('completed_date', date);
+      if (error) throw error;
     }
-
-    const { data, error } = await supabase.from('habits').update({
-      completed_dates: dates,
-      streak: streak
-    }).eq('id', habitId).select().single();
-
-    if (error) throw error;
-    return data;
   },
 
   async createExpense(userId: string, date: string, item: ExpenseItem) {
     const { data, error } = await supabase.from('expenses').insert({
       id: item.id,
       user_id: userId,
-      amount: item.amount,
-      category: item.category,
-      description: item.title,
       date: date,
-      metadata: {
-        type: item.type,
-        customCategory: item.customCategory,
-        source: item.source,
-        timestamp: item.timestamp
-      }
+      title: item.title,
+      amount: item.amount,
+      type: item.type,
+      category: item.category,
+      custom_category: item.customCategory,
+      source: item.source,
+      timestamp: item.timestamp
     }).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateExpense(id: string, updates: Partial<ExpenseItem>) {
-    const { data: existing } = await supabase.from('expenses').select('metadata').eq('id', id).single();
-    const existingMeta = existing?.metadata || {};
-
     const dbUpdates: any = {};
-    if (updates.title !== undefined) dbUpdates.description = updates.title;
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
-
-    const newMeta = { ...existingMeta };
-    if (updates.type !== undefined) newMeta.type = updates.type;
-    if (updates.customCategory !== undefined) newMeta.customCategory = updates.customCategory;
-    if (updates.source !== undefined) newMeta.source = updates.source;
-    if (updates.timestamp !== undefined) newMeta.timestamp = updates.timestamp;
-    dbUpdates.metadata = newMeta;
+    if (updates.type !== undefined) dbUpdates.type = updates.type;
+    if (updates.customCategory !== undefined) dbUpdates.custom_category = updates.customCategory;
+    if (updates.source !== undefined) dbUpdates.source = updates.source;
+    if (updates.timestamp !== undefined) dbUpdates.timestamp = updates.timestamp;
 
     const { data, error } = await supabase.from('expenses').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
@@ -352,14 +318,12 @@ export const supabaseService = {
     const { data, error } = await supabase.from('notes').insert({
       id: item.id,
       user_id: userId,
+      date: date,
       title: item.title,
       content: item.content,
-      metadata: {
-        date,
-        tags: item.tags,
-        timestamp: item.timestamp,
-        isExcuse: item.isExcuse
-      }
+      tags: item.tags,
+      is_excuse: item.isExcuse,
+      timestamp: item.timestamp
     }).select().single();
     if (error) throw error;
     return data;
@@ -371,59 +335,47 @@ export const supabaseService = {
   },
 
   async updateProfile(userId: string, updates: Partial<UserProfile>) {
-    const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
-    const existingMeta = existing?.metadata || {};
-    
     const dbUpdates: any = {};
-    if (updates.name !== undefined) dbUpdates.username = updates.name;
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.gender !== undefined) dbUpdates.gender = updates.gender;
+    if (updates.age !== undefined) dbUpdates.age = updates.age;
+    if (updates.country !== undefined) dbUpdates.country = updates.country;
+    if (updates.plan !== undefined) dbUpdates.plan = updates.plan;
+    if (updates.disciplineScore !== undefined) dbUpdates.discipline_score = updates.disciplineScore;
     if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
-    
-    const newMeta = { ...existingMeta, ...updates };
-    dbUpdates.metadata = newMeta;
-    
-    const { data, error } = await supabase.from('profile').update(dbUpdates).eq('id', userId).select().single();
+
+    const { data: existing } = await supabase.from('profiles').select('id').eq('id', userId).single();
+    if (!existing) {
+       await supabase.from('profiles').insert({ id: userId, ...dbUpdates });
+       return;
+    }
+
+    const { data, error } = await supabase.from('profiles').update(dbUpdates).eq('id', userId).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateSettings(userId: string, updates: Partial<UserSettings>) {
-    const { data: existing } = await supabase.from('profile').select('settings, metadata, username').eq('id', userId).single();
-    
     const dbUpdates: any = {};
-    if (updates.name !== undefined) {
-      dbUpdates.username = updates.name; // Keep name in sync with username
-    }
-    
-    const newSettings = { ...(existing?.settings || {}), ...updates };
-    dbUpdates.settings = newSettings;
-    
-    // Create profile if doesn't exist
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.dayEndTime !== undefined) dbUpdates.day_end_time = updates.dayEndTime;
+    if (updates.theme !== undefined) dbUpdates.theme = updates.theme;
+    if (updates.initialBalance !== undefined) dbUpdates.initial_balance = updates.initialBalance;
+    if (updates.savingsBalance !== undefined) dbUpdates.savings_balance = updates.savingsBalance;
+    if (updates.monthlyIncome !== undefined) dbUpdates.monthly_income = updates.monthlyIncome;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
+
+    const { data: existing } = await supabase.from('user_settings').select('user_id').eq('user_id', userId).single();
     if (!existing) {
-       const { error } = await supabase.from('profile').insert({
-         id: userId,
-         username: updates.name,
-         settings: newSettings
-       });
-       if (error) throw error;
+       await supabase.from('user_settings').insert({ user_id: userId, ...dbUpdates });
        return;
     }
 
-    const { data, error } = await supabase.from('profile').update(dbUpdates).eq('id', userId).select().single();
+    const { data, error } = await supabase.from('user_settings').update(dbUpdates).eq('user_id', userId).select().single();
     if (error) throw error;
     return data;
   },
 
-  async updateNotifications(userId: string, notifications: unknown[]) {
-    const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
-    const newMeta = { ...(existing?.metadata || {}), notifications };
-    const { error } = await supabase.from('profile').update({ metadata: newMeta }).eq('id', userId);
-    if (error) throw error;
-  },
-
-  async updateSavedSchedules(userId: string, schedules: unknown[]) {
-     const { data: existing } = await supabase.from('profile').select('metadata').eq('id', userId).single();
-     const newMeta = { ...(existing?.metadata || {}), savedSchedules: schedules };
-     const { error } = await supabase.from('profile').update({ metadata: newMeta }).eq('id', userId);
-     if (error) throw error;
-  }
+  async updateNotifications(userId: string, notifications: unknown[]) {},
+  async updateSavedSchedules(userId: string, schedules: unknown[]) {}
 };
