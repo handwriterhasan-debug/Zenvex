@@ -287,31 +287,32 @@ export default function Habits() {
             <p className="text-text-muted">Start building your future by adding a new habit.</p>
           </div>
         ) : habits.map((habit, i) => (
-          <div key={`${habit.id}-${i}`} className="bg-surface border border-border-dim rounded-2xl md:rounded-3xl p-4 md:p-6 relative group shadow-sm hover:border-accent-primary-border transition-all">
-            <div className="absolute top-3 right-3 md:top-4 md:right-4 flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
-              <button 
-                onClick={() => handleEdit(habit)}
-                className="p-2 bg-surface border border-border-dim hover:bg-surface-hover rounded-xl text-text-muted hover:text-text-main transition-all shadow-sm"
-                title="Edit Habit"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => deleteHabit(habit.id)}
-                className="p-2 bg-surface border border-border-dim hover:border-red-500/30 hover:bg-red-500/10 rounded-xl text-text-muted hover:text-red-500 transition-all shadow-sm"
-                title="Delete Habit"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="flex items-center justify-between gap-4 md:gap-6 mb-6 md:mb-8 pt-6 sm:pt-0">
-              <div className="flex items-center gap-3 md:gap-5 min-w-0">
+          <div key={`${habit.id}-${i}`} className="bg-surface border border-border-dim rounded-2xl md:rounded-3xl p-4 md:p-6 group shadow-sm hover:border-accent-primary-border transition-all">
+            <div className="flex items-start md:items-center justify-between gap-4 md:gap-6 mb-6 md:mb-8">
+              <div className="flex items-center gap-3 md:gap-5 min-w-0 flex-1">
                 <div className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl bg-surface-light border border-border-dim flex items-center justify-center font-display font-bold text-xl md:text-2xl ${habit.color.replace('bg-', 'text-').replace('500', '500')}`}>
                   {habit.name.charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base md:text-xl font-bold tracking-tight truncate text-text-main pr-2">{habit.name}</h3>
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <h3 className="text-base md:text-xl font-bold tracking-tight truncate text-text-main">{habit.name}</h3>
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                      <button 
+                        onClick={() => handleEdit(habit)}
+                        className="p-1.5 md:p-2 bg-surface-light border border-border-dim hover:bg-surface-hover rounded-lg md:rounded-xl text-text-muted hover:text-text-main transition-all shadow-sm"
+                        title="Edit Habit"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      </button>
+                      <button 
+                        onClick={() => deleteHabit(habit.id)}
+                        className="p-1.5 md:p-2 bg-surface-light border border-border-dim hover:border-red-500/30 hover:bg-red-500/10 rounded-lg md:rounded-xl text-text-muted hover:text-red-500 transition-all shadow-sm"
+                        title="Delete Habit"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 md:gap-2.5 text-xs md:text-sm text-text-muted mt-1.5 font-medium">
                     <span className="bg-white/5 border border-white/10 px-2 py-0.5 md:px-2 md:py-1 rounded-md shrink-0">{habit.category}</span>
                     <span className={`flex items-center gap-1 px-2 py-0.5 md:px-2 md:py-1 rounded-md shrink-0 ${habit.streak > 0 ? 'text-accent-primary bg-accent-primary-dim' : 'text-red-500 bg-red-500/10'}`}>

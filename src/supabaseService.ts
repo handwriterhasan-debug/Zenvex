@@ -230,14 +230,22 @@ export const supabaseService = {
   },
 
   async createHabit(userId: string, item: HabitItem) {
-    const { data, error } = await supabase.from('habits').insert({
+    const payload: any = {
       id: item.id,
       user_id: userId,
       name: item.name,
       category: item.category,
       target_days: item.target,
       streak: item.streak || 0
-    }).select().single();
+    };
+    
+    let { data, error } = await supabase.from('habits').insert(payload).select().single();
+    if (error && error.message.includes('streak')) {
+      delete payload.streak;
+      const fallback = await supabase.from('habits').insert(payload).select().single();
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     return data;
   },
@@ -251,7 +259,17 @@ export const supabaseService = {
 
     if (Object.keys(dbUpdates).length === 0) return null;
 
-    const { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
+    let { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
+    if (error && error.message.includes('streak')) {
+      delete dbUpdates.streak;
+      if (Object.keys(dbUpdates).length > 0) {
+        const fallback = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
+        data = fallback.data;
+        error = fallback.error;
+      } else {
+        return null; // Nothing left to update
+      }
+    }
     if (error) throw error;
     return data;
   },
