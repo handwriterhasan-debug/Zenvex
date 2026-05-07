@@ -15,8 +15,14 @@ export const supabaseService = {
       }
     };
 
+    let profileReq = await safeFetch(supabase.from('profiles').select('*').eq('id', userId).maybeSingle());
+    if (profileReq.error && (profileReq.error.code === 'PGRST116' || profileReq.error.code === '42P01' || profileReq.error.message?.includes('relation'))) {
+      const fallback = await safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle());
+      if (!fallback.error) profileReq = fallback;
+    }
+
     const fetches = await Promise.all([
-      safeFetch(supabase.from('profiles').select('*').eq('id', userId).maybeSingle()),
+      Promise.resolve(profileReq),
       safeFetch(supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle()),
       safeFetch(supabase.from('schedules').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
@@ -66,14 +72,14 @@ export const supabaseService = {
     // Parse habits
     const defaultColors = ['bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500'];
     const parsedHabits = habits.map((h, i) => {
-      const logsForHabit = habitLogs.filter(l => l.habit_id === h.id).map(l => l.completed_date);
+      const logsForHabit = habitLogs.filter(l => l.habit_id === h.id).map(l => l.completed_date || l.date);
       return {
         id: h.id,
         name: h.name,
         category: h.category || 'Fitness',
-        target: h.target_days ? Number(h.target_days) : 7,
+        target: h.target_days ? Number(h.target_days) : (h.target ? Number(h.target) : 7),
         color: defaultColors[i % defaultColors.length], // Fallback since color isn't in DB
-        startDate: (h.created_at || new Date().toISOString()).split('T')[0],
+        startDate: (h.start_date || h.created_at || new Date().toISOString()).split('T')[0],
         completedToday: false, // Computed below based on date
         streak: h.streak ? Number(h.streak) : 0,
         completed_dates: logsForHabit
@@ -240,8 +246,12 @@ export const supabaseService = {
     };
     
     let { data, error } = await supabase.from('habits').insert(payload).select().single();
-    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('streak'))) {
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('streak') || error.message?.includes('target_days'))) {
       delete payload.streak;
+      delete payload.target_days;
+      payload.target = item.target;
+      payload.color = item.color || 'bg-blue-500';
+      payload.start_date = item.startDate ? item.startDate : new Date().toISOString().split('T')[0];
       const fallback = await supabase.from('habits').insert(payload).select().single();
       data = fallback.data;
       error = fallback.error;
@@ -260,8 +270,13 @@ export const supabaseService = {
     if (Object.keys(dbUpdates).length === 0) return null;
 
     let { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
-    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('streak'))) {
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('streak') || error.message?.includes('target_days'))) {
       delete dbUpdates.streak;
+      if (dbUpdates.target_days !== undefined) {
+        dbUpdates.target = dbUpdates.target_days;
+        delete dbUpdates.target_days;
+      }
+      if (updates.color !== undefined) dbUpdates.color = updates.color;
       if (Object.keys(dbUpdates).length > 0) {
         const fallback = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
         data = fallback.data;
@@ -279,18 +294,36 @@ export const supabaseService = {
     if (error) throw error;
   },
 
-  async upsertHabitLog(userId: string, habitId: string, date: string, completed: boolean) {
+  async upsertHabitLog(userId: string, habitId: string, customDate: string, completed: boolean) {
     if (completed) {
-      const { error } = await supabase.from('habit_logs').insert({
+      const payload: any = {
         user_id: userId,
         habit_id: habitId,
-        completed_date: date
-      });
-      if (error && !error.message.includes('duplicate key')) throw error;
+        completed_date: customDate
+      };
+      let { error } = await supabase.from('habit_logs').insert(payload);
+      
+      // Fallback for different schema version where column is 'date' instead of 'completed_date'
+      if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('completed_date'))) {
+        delete payload.completed_date;
+        payload.date = customDate;
+        const fallback = await supabase.from('habit_logs').insert(payload);
+        error = fallback.error;
+      }
+      
+      if (error && !error.message?.includes('duplicate key')) throw error;
     } else {
-      const { error } = await supabase.from('habit_logs').delete()
+      let { error } = await supabase.from('habit_logs').delete()
         .eq('habit_id', habitId)
-        .eq('completed_date', date);
+        .eq('completed_date', customDate);
+        
+      if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('completed_date'))) {
+        const fallback = await supabase.from('habit_logs').delete()
+          .eq('habit_id', habitId)
+          .eq('date', customDate);
+        error = fallback.error;
+      }
+      
       if (error) throw error;
     }
   },
@@ -362,13 +395,20 @@ export const supabaseService = {
     if (updates.disciplineScore !== undefined) dbUpdates.discipline_score = updates.disciplineScore;
     if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
 
-    const { data: existing } = await supabase.from('profiles').select('id').eq('id', userId).single();
+    let { data: existing, error: existError } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
+    let tableName = 'profiles';
+    if (existError && (existError.code === '42P01' || existError.message?.includes('relation'))) {
+      tableName = 'user_profiles';
+      const fallback = await supabase.from('user_profiles').select('id').eq('id', userId).maybeSingle();
+      existing = fallback.data;
+    }
+
     if (!existing) {
-       await supabase.from('profiles').insert({ id: userId, ...dbUpdates });
+       await supabase.from(tableName).insert({ id: userId, ...dbUpdates });
        return;
     }
 
-    const { data, error } = await supabase.from('profiles').update(dbUpdates).eq('id', userId).select().single();
+    const { data, error } = await supabase.from(tableName).update(dbUpdates).eq('id', userId).select().single();
     if (error) throw error;
     return data;
   },
