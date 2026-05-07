@@ -240,7 +240,7 @@ export const supabaseService = {
     };
     
     let { data, error } = await supabase.from('habits').insert(payload).select().single();
-    if (error && error.message.includes('streak')) {
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('streak'))) {
       delete payload.streak;
       const fallback = await supabase.from('habits').insert(payload).select().single();
       data = fallback.data;
@@ -260,7 +260,7 @@ export const supabaseService = {
     if (Object.keys(dbUpdates).length === 0) return null;
 
     let { data, error } = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();
-    if (error && error.message.includes('streak')) {
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('streak'))) {
       delete dbUpdates.streak;
       if (Object.keys(dbUpdates).length > 0) {
         const fallback = await supabase.from('habits').update(dbUpdates).eq('id', id).select().single();

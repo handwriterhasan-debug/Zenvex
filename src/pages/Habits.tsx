@@ -291,7 +291,7 @@ export default function Habits() {
             <div className="flex items-start md:items-center justify-between gap-4 md:gap-6 mb-6 md:mb-8">
               <div className="flex items-center gap-3 md:gap-5 min-w-0 flex-1">
                 <div className={`w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl bg-surface-light border border-border-dim flex items-center justify-center font-display font-bold text-xl md:text-2xl ${habit.color.replace('bg-', 'text-').replace('500', '500')}`}>
-                  {habit.name.charAt(0)}
+                  {Array.from(habit.name)[0]}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 md:gap-3">
