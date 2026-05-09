@@ -199,7 +199,7 @@ export const supabaseService = {
   },
 
   async createSchedule(userId: string, date: string, item: ScheduleItem) {
-    const { data, error } = await supabase.from('schedules').insert({
+    const payload: any = {
       id: item.id,
       user_id: userId,
       date: date,
@@ -210,7 +210,16 @@ export const supabaseService = {
       status: item.status,
       actual_hours: item.actualHours,
       excuse: item.excuse
-    }).select().single();
+    };
+    
+    let { data, error } = await supabase.from('schedules').insert(payload).select().single();
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('actual_hours') || error.message?.includes('excuse'))) {
+      delete payload.actual_hours;
+      delete payload.excuse;
+      const fallback = await supabase.from('schedules').insert(payload).select().single();
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     return data;
   },
@@ -225,7 +234,18 @@ export const supabaseService = {
     if ('actualHours' in updates) dbUpdates.actual_hours = updates.actualHours;
     if ('excuse' in updates) dbUpdates.excuse = updates.excuse;
 
-    const { data, error } = await supabase.from('schedules').update(dbUpdates).eq('id', id).select().single();
+    let { data, error } = await supabase.from('schedules').update(dbUpdates).eq('id', id).select().single();
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('actual_hours') || error.message?.includes('excuse'))) {
+      delete dbUpdates.actual_hours;
+      delete dbUpdates.excuse;
+      if (Object.keys(dbUpdates).length > 0) {
+        const fallback = await supabase.from('schedules').update(dbUpdates).eq('id', id).select().single();
+        data = fallback.data;
+        error = fallback.error;
+      } else {
+        return null;
+      }
+    }
     if (error) throw error;
     return data;
   },
@@ -329,7 +349,7 @@ export const supabaseService = {
   },
 
   async createExpense(userId: string, date: string, item: ExpenseItem) {
-    const { data, error } = await supabase.from('expenses').insert({
+    const payload: any = {
       id: item.id,
       user_id: userId,
       date: date,
@@ -340,7 +360,16 @@ export const supabaseService = {
       custom_category: item.customCategory,
       source: item.source,
       timestamp: item.timestamp
-    }).select().single();
+    };
+    let { data, error } = await supabase.from('expenses').insert(payload).select().single();
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('custom_category') || error.message?.includes('source') || error.message?.includes('timestamp'))) {
+      delete payload.custom_category;
+      delete payload.source;
+      delete payload.timestamp;
+      const fallback = await supabase.from('expenses').insert(payload).select().single();
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     return data;
   },
@@ -355,7 +384,19 @@ export const supabaseService = {
     if (updates.source !== undefined) dbUpdates.source = updates.source;
     if (updates.timestamp !== undefined) dbUpdates.timestamp = updates.timestamp;
 
-    const { data, error } = await supabase.from('expenses').update(dbUpdates).eq('id', id).select().single();
+    let { data, error } = await supabase.from('expenses').update(dbUpdates).eq('id', id).select().single();
+    if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('custom_category') || error.message?.includes('source') || error.message?.includes('timestamp'))) {
+      delete dbUpdates.custom_category;
+      delete dbUpdates.source;
+      delete dbUpdates.timestamp;
+      if (Object.keys(dbUpdates).length > 0) {
+        const fallback = await supabase.from('expenses').update(dbUpdates).eq('id', id).select().single();
+        data = fallback.data;
+        error = fallback.error;
+      } else {
+        return null;
+      }
+    }
     if (error) throw error;
     return data;
   },

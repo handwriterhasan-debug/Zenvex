@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, CheckCircle2, MoreVertical, Trash2, Edit2, X, PieChart as PieChartIcon, XCircle, GripVertical } from 'lucide-react';
+import { Plus, Clock, CheckCircle2, MoreVertical, Trash2, Edit2, X, PieChart as PieChartIcon, XCircle, GripVertical, Square, CheckSquare } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useState } from 'react';
 import { CustomTimePicker } from '../components/CustomTimePicker';
@@ -132,9 +132,7 @@ export default function Schedule() {
   };
 
   const toggleStatus = (id: string, currentStatus: string) => {
-    if (currentStatus === 'pending') {
-      updateSchedule(id, { status: 'in-progress' });
-    } else if (currentStatus === 'in-progress') {
+    if (currentStatus === 'pending' || currentStatus === 'in-progress') {
       const task = schedule.find(t => t.id === id);
       const plannedHours = task ? calculatePlannedHours(task.timeStart, task.timeEnd) : 0;
       setCompletionModal({
@@ -434,11 +432,12 @@ export default function Schedule() {
                           <button 
                             onClick={() => toggleStatus(item.id, item.status)}
                             className="cursor-pointer shrink-0"
+                            title={item.status === 'completed' ? 'Mark as Pending' : 'Mark as Completed'}
                           >
                             {item.status === 'completed' && (
-                              <span className="flex items-center gap-1 text-emerald-500 text-sm font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                                <CheckCircle2 className="w-4 h-4" /> Completed
-                              </span>
+                              <div className="text-emerald-500 hover:text-emerald-400 transition-colors">
+                                <CheckSquare className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2} />
+                              </div>
                             )}
                             {item.status === 'in-progress' && (
                               <span className="flex items-center gap-1.5 text-accent-primary text-sm font-medium bg-accent-primary-dim px-3 py-1.5 rounded-full border border-accent-primary-border">
@@ -451,9 +450,9 @@ export default function Schedule() {
                               </span>
                             )}
                             {item.status === 'pending' && (
-                              <span className="flex items-center gap-1 text-text-muted text-sm font-medium bg-surface-light px-3 py-1.5 rounded-full hover:bg-surface-hover border border-border-dim transition-colors">
-                                Pending
-                              </span>
+                              <div className="text-gray-400 hover:text-emerald-500 transition-colors">
+                                <Square className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2} />
+                              </div>
                             )}
                           </button>
                           

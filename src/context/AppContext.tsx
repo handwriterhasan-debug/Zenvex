@@ -219,17 +219,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              console.error("Partial load error from DB arrays:", loadedData);
           }
           
-          const isNewUser = (!loadedData.profile || !loadedData.settings) && !loadedData.hasError;
           const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
           
           let localState: AppState | null = null;
-          // Only merge local state if they are a guest or if they are an existing user (to preserve offline changes)
-          // If they are a brand new signed-up user, we want a clean slate
-          if (isGuestMode || !isNewUser) {
-            const saved = localStorage.getItem('makeYourFutureState');
-            if (saved) {
-              try { localState = JSON.parse(saved); } catch (e) {}
-            }
+          // Always try to load local state as a fallback
+          const saved = localStorage.getItem('makeYourFutureState');
+          if (saved) {
+            try { localState = JSON.parse(saved); } catch (e) {}
           }
 
           const resolvedUserSettings = {
@@ -321,6 +317,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           
           if (!loadedState.userSettings?.theme) loadedState.userSettings = { ...loadedState.userSettings, theme: 'dark' };
           
+          const isNewUser = (!loadedData.profile || !loadedData.settings) && !loadedData.hasError;
           if (isNewUser) {
             try {
               await supabaseService.updateSettings(session.user.id, loadedState.userSettings);
@@ -484,10 +481,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!isStateLoaded) return;
 
-    const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
-    if (isGuestMode) {
-      localStorage.setItem('makeYourFutureState', JSON.stringify(state));
-    }
+    localStorage.setItem('makeYourFutureState', JSON.stringify(state));
     
     // Apply theme to body and html
     if (state.userSettings.theme === 'light') {
