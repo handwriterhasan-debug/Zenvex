@@ -236,11 +236,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const currentLogicalDate = getLogicalDate(resolvedUserSettings.dayEndTime || '23:59');
           
           const safeArray = (dbArray: any[], localArray: any[] | undefined) => {
-             // For guests and failed loads, prioritize local data if DB returned nothing
-             if ((isGuestMode || loadedData.hasError) && (!dbArray || dbArray.length === 0) && localArray && localArray.length > 0) {
-               return localArray;
+             const local = localArray || [];
+             if (!dbArray || dbArray.length === 0) {
+               return local;
              }
-             return dbArray && dbArray.length > 0 ? dbArray : (localArray || []);
+             // Merge arrays by ID, favoring dbArray for conflicts, but keeping local-only items
+             // if they failed to sync recently.
+             const merged = [...dbArray];
+             const dbIds = new Set(dbArray.map(item => item.id));
+             for (const item of local) {
+               if (item.id && !dbIds.has(item.id)) {
+                 merged.push(item);
+               }
+             }
+             return merged;
           };
 
           // Find day data prioritizing existing local state if DB didn't find anything for today, or if local is richer
@@ -275,6 +284,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             notifications: safeArray(loadedData.notifications, localState?.notifications),
             isDemoMode: false
           };
+
+          // Re-calculate all streaks dynamically based on completion history
+          // This ensures streaks are correct even if the 'streak' column in Supabase failed to update
+          const allDaysForStreak = [...loadedState.history, loadedState.currentDayData].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+          for (let i = 0; i < allDaysForStreak.length; i++) {
+            const currentDay = allDaysForStreak[i];
+            const [yYear, yMonthOrig, yDayOrig] = currentDay.date.split('-');
+            const yesterdayObj = new Date(Number(yYear), Number(yMonthOrig) - 1, Number(yDayOrig));
+            yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+            const yMonth = String(yesterdayObj.getMonth() + 1).padStart(2, '0');
+            const yDayNum = String(yesterdayObj.getDate()).padStart(2, '0');
+            const yesterdayStr = `${yesterdayObj.getFullYear()}-${yMonth}-${yDayNum}`;
+            
+            const prevDay = allDaysForStreak.find(d => d.date === yesterdayStr);
+
+            allDaysForStreak[i] = {
+              ...currentDay,
+              habits: currentDay.habits.map(h => {
+                const prevHabit = prevDay?.habits.find(ph => ph.id === h.id);
+                const prevStreak = prevHabit ? prevHabit.streak : 0;
+                const isToday = currentDay.date === currentLogicalDate;
+                let updatedStreak = 0;
+                if (h.completedToday) updatedStreak = prevStreak + 1;
+                else if (isToday) updatedStreak = prevStreak;
+                else updatedStreak = 0;
+                return { ...h, streak: updatedStreak };
+              })
+            };
+          }
+          loadedState.history = allDaysForStreak.filter(d => d.date !== currentLogicalDate);
+          loadedState.currentDayData = allDaysForStreak.find(d => d.date === currentLogicalDate) || loadedState.currentDayData;
 
           // --- Cleanup Fake Data ---
           // Remove "Hasan Test Schedule" template
