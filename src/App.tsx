@@ -22,6 +22,7 @@ import Profile from './pages/Profile';
 import Subscription from './pages/Subscription';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminComplaints from './pages/AdminComplaints';
+import ApiMcp from './pages/ApiMcp';
 
 import AuthCallback from './pages/AuthCallback';
 
@@ -47,6 +48,7 @@ export default function App() {
               <Route path="/notes" element={<Notes />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/subscription" element={<Subscription />} />
+              <Route path="/api-mcp" element={<ApiMcp />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin/complaints" element={<AdminComplaints />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

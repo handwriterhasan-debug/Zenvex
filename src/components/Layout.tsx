@@ -24,7 +24,8 @@ import {
   LogOut,
   Sparkles,
   ArrowRightLeft,
-  Lock
+  Lock,
+  Code
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -40,12 +41,14 @@ const navItems = [
   { name: 'Schedule', path: '/schedule', icon: Calendar },
   { name: 'Habits', path: '/habits', icon: CheckSquare },
   { name: 'Expenses', path: '/expenses', icon: Wallet },
+  { name: 'AI Tutor', path: '#ai-tutor', icon: Sparkles, isAction: true },
   { name: 'Currency', path: '/currency', icon: ArrowRightLeft },
   { name: 'Analytics', path: '/analytics', icon: PieChart },
   { name: 'History', path: '/history', icon: History },
   { name: 'Notes', path: '/notes', icon: BookOpen },
   { name: 'Profile', path: '/profile', icon: UserCircle },
   { name: 'Subscription', path: '/subscription', icon: CreditCard },
+  { name: 'API / MCP', path: '/api-mcp', icon: Code },
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
 
@@ -339,6 +342,14 @@ export default function Layout() {
               <NavLink
                 key={item.name}
                 to={item.path}
+                onClick={(e) => {
+                  if ((item as any).isAction) {
+                    e.preventDefault();
+                    if (item.path === '#ai-tutor') {
+                      window.dispatchEvent(new Event('open-ai-chatbot'));
+                    }
+                  }
+                }}
                 className={({ isActive }) => cn(
                   "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative",
                   isActive 
@@ -537,6 +548,14 @@ export default function Layout() {
               <NavLink
                 key={item.name}
                 to={item.path}
+                onClick={(e) => {
+                  if ((item as any).isAction) {
+                    e.preventDefault();
+                    if (item.path === '#ai-tutor') {
+                      window.dispatchEvent(new Event('open-ai-chatbot'));
+                    }
+                  }
+                }}
                 className={({ isActive }) => cn(
                   "relative flex flex-col items-center justify-start rounded-xl transition-all duration-300 flex-1 h-full min-w-0 max-w-[16.66%]",
                   isActive 
@@ -799,7 +818,15 @@ export default function Layout() {
                       <NavLink
                         key={item.name}
                         to={item.path}
-                        onClick={() => setIsMobileMenuOpen(false)}
+                        onClick={(e) => {
+                          if ((item as any).isAction) {
+                            e.preventDefault();
+                            if (item.path === '#ai-tutor') {
+                              window.dispatchEvent(new Event('open-ai-chatbot'));
+                            }
+                          }
+                          setIsMobileMenuOpen(false);
+                        }}
                         className={({ isActive }) => cn(
                           "flex items-center justify-between px-3 sm:px-4 py-3 sm:py-3.5 rounded-xl text-sm sm:text-base font-medium transition-all duration-200 relative mb-1",
                           isActive 
