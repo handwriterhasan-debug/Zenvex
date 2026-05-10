@@ -143,10 +143,12 @@ export default function Expenses() {
 
   const monthlyIncome = userSettings.monthlyIncome || 0;
   const baseSavings = userSettings.savingsBalance || 0;
+  const baseWallet = userSettings.initialBalance || 0;
+  const baseExpenses = userSettings.initialExpenses || 0;
 
   const currentSavings = baseSavings + savingsIncomes - savingsExpenses;
-  const currentWallet = monthlyIncome + currentSavings + walletIncomes - walletExpenses;
-  const totalExpense = walletExpenses + savingsExpenses;
+  const currentWallet = baseWallet + walletIncomes - walletExpenses;
+  const totalExpense = baseExpenses + walletExpenses + savingsExpenses;
 
   const saveIncome = () => { 
     const inputAmount = Number(incomeInput) || 0;
@@ -169,6 +171,30 @@ export default function Expenses() {
     }
     updateSettings({ savingsBalance: desiredInPKR - savingsIncomes + savingsExpenses }); 
     setIsEditingSavings(false); 
+  };
+  
+  const saveWallet = () => { 
+    const inputAmount = Number(walletInput) || 0;
+    let desiredInPKR = inputAmount;
+    if (currency !== 'PKR' && exchangeRatesCache?.rates && exchangeRatesCache.rates['PKR']) {
+      const ratePKR = exchangeRatesCache.rates['PKR'];
+      const rateTarget = exchangeRatesCache.rates[currency] || 1;
+      desiredInPKR = (inputAmount / rateTarget) * ratePKR;
+    }
+    updateSettings({ initialBalance: desiredInPKR - walletIncomes + walletExpenses }); 
+    setIsEditingWallet(false); 
+  };
+
+  const saveExpenses = () => { 
+    const inputAmount = Number(expensesInput) || 0;
+    let desiredInPKR = inputAmount;
+    if (currency !== 'PKR' && exchangeRatesCache?.rates && exchangeRatesCache.rates['PKR']) {
+      const ratePKR = exchangeRatesCache.rates['PKR'];
+      const rateTarget = exchangeRatesCache.rates[currency] || 1;
+      desiredInPKR = (inputAmount / rateTarget) * ratePKR;
+    }
+    updateSettings({ initialExpenses: desiredInPKR - walletExpenses - savingsExpenses }); 
+    setIsEditingExpenses(false); 
   };
 
   // Calculate category breakdown for expenses
@@ -333,15 +359,51 @@ export default function Expenses() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Wallet Card */}
         <div className="bg-surface border border-border-dim rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden shadow-sm group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-emerald-500/10"></div>
-          <div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-emerald-500/10 pointer-events-none"></div>
+          <div className="relative z-10">
             <div className="flex items-center justify-between text-text-muted text-sm mb-4">
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-emerald-500" />
                 <span>Total Wallet</span>
               </div>
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isEditingWallet) {
+                    saveWallet();
+                  } else {
+                    setWalletInput(getConvertedAmount(currentWallet).toString());
+                    setIsEditingWallet(true);
+                  }
+                }}
+                className="p-1.5 hover:bg-surface-hover rounded-lg transition-colors text-text-faint hover:text-text-main"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <span className="text-3xl font-bold text-text-main tracking-tight">{symbol} {getConvertedAmount(currentWallet).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            {isEditingWallet ? (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={walletInput}
+                  onChange={e => {
+                    if (Number(e.target.value) < 0) return;
+                    setWalletInput(e.target.value);
+                  }}
+                  className="bg-surface-light border border-border-dim rounded-lg px-3 py-1.5 w-full text-text-main focus:outline-none focus:border-emerald-500 text-lg"
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && saveWallet()}
+                />
+                <button onClick={saveWallet} className="bg-emerald-500 text-white p-1.5 rounded-lg">
+                  <CheckCircle2 className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <span className="text-3xl font-bold text-text-main tracking-tight">{symbol} {getConvertedAmount(currentWallet).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            )}
           </div>
           <div className="mt-6">
             <div className="flex justify-between text-xs text-text-muted mb-2">
@@ -359,8 +421,8 @@ export default function Expenses() {
 
         {/* Savings Card */}
         <div className="bg-surface border border-border-dim rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden shadow-sm group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-blue-500/10"></div>
-          <div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-blue-500/10 pointer-events-none"></div>
+          <div className="relative z-10">
             <div className="flex items-center justify-between text-text-muted text-sm mb-4">
               <div className="flex items-center gap-2">
                 <PiggyBank className="w-4 h-4 text-blue-500" />
@@ -421,8 +483,8 @@ export default function Expenses() {
 
         {/* Income Card */}
         <div className="bg-surface border border-border-dim rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden shadow-sm group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-emerald-500/10"></div>
-          <div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-emerald-500/10 pointer-events-none"></div>
+          <div className="relative z-10">
             <div className="flex items-center justify-between text-text-muted text-sm mb-4">
               <div className="flex items-center gap-2">
                 <ArrowUp className="w-4 h-4 text-emerald-500" />
@@ -477,15 +539,51 @@ export default function Expenses() {
 
         {/* Expenses Card */}
         <div className="bg-surface border border-border-dim rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden shadow-sm group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-accent-primary-dim rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-accent-primary-border"></div>
-          <div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-accent-primary-dim rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-accent-primary-border pointer-events-none"></div>
+          <div className="relative z-10">
             <div className="flex items-center justify-between text-text-muted text-sm mb-4">
               <div className="flex items-center gap-2">
                 <ArrowDown className="w-4 h-4 text-accent-primary" />
                 <span>Total Expenses</span>
               </div>
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isEditingExpenses) {
+                    saveExpenses();
+                  } else {
+                    setExpensesInput(getConvertedAmount(totalExpense).toString());
+                    setIsEditingExpenses(true);
+                  }
+                }}
+                className="p-1.5 hover:bg-surface-hover rounded-lg transition-colors text-text-faint hover:text-text-main"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <span className="text-3xl font-bold text-text-main tracking-tight">{symbol} {getConvertedAmount(totalExpense).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            {isEditingExpenses ? (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={expensesInput}
+                  onChange={e => {
+                    if (Number(e.target.value) < 0) return;
+                    setExpensesInput(e.target.value);
+                  }}
+                  className="bg-surface-light border border-border-dim rounded-lg px-3 py-1.5 w-full text-text-main focus:outline-none focus:border-accent-primary text-lg"
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && saveExpenses()}
+                />
+                <button onClick={saveExpenses} className="bg-accent-primary text-white p-1.5 rounded-lg">
+                  <CheckCircle2 className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <span className="text-3xl font-bold text-text-main tracking-tight">{symbol} {getConvertedAmount(totalExpense).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            )}
           </div>
           <div className="mt-6">
             <div className="flex justify-between text-xs text-text-muted mb-2">
