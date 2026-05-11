@@ -13,9 +13,9 @@ interface Message {
 
 type ModelProvider = 'Grok' | 'Gemini' | 'OpenRouter';
 
-const GROQ_API_KEY = "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";
-const GEMINI_API_KEY_OVERRIDE = "AIzaSyA9eug5ROm3Lw1VefSEGpuRHMGts-qjPWY";
-const OPENROUTER_API_KEY = "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";
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GEMINI_API_KEY_OVERRIDE = import.meta.env.VITE_GEMINI_API_KEY;
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 
 const MODELS = [
   { id: 'Gemini', name: 'Gemini (Flash)', icon: '✨' },
@@ -55,25 +55,24 @@ export default function AIAgent() {
       const systemPrompt = `You are a helpful and knowledgeable AI Agent and Research Assistant. The user's name is ${userSettings.name || 'User'}. You are designed to provide accurate info, summarize topics, help with research, answer questions, and hold engaging conversations like Gemini or Claude. Be thorough but clear and structured in your responses (use markdown, lists, and headings when appropriate). If they ask you for advice on tasks or schedules within the Zenvex app, refer them to the "AI Tutor" option.\n\nChat History:\n${chatHistoryText}`;
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Timeout")), 30000); // 30s timeout for agent
+        setTimeout(() => reject(new Error("Timeout")), 30000);
       });
 
       let responseText = "";
 
       if (provider === 'Gemini') {
-        const apiKey = GEMINI_API_KEY_OVERRIDE || process.env.GEMINI_API_KEY;
+        const apiKey = GEMINI_API_KEY_OVERRIDE;
         if (!apiKey) throw new Error("GEMINI_API_KEY is missing.");
         const ai = new GoogleGenAI({ apiKey });
         const response = await Promise.race([
           ai.models.generateContent({
-            model: 'gemini-3-flash-preview', // Or gemini-1.5-flash
+            model: 'gemini-3-flash-preview',
             contents: `${systemPrompt}\nUser: ${userMsg.content}\nAssistant:`,
           }),
           timeoutPromise
         ]) as any;
         responseText = response.text || "I'm sorry, I couldn't generate a response.";
       } else if (provider === 'Grok') {
-        // Assume Groq API for Grok given the gsk_ prefix
         const groqMessages = [
           { role: 'system', content: systemPrompt },
           ...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
@@ -167,18 +166,13 @@ export default function AIAgent() {
       <div className="flex-1 min-h-0 bg-surface border border-border-dim rounded-2xl flex flex-col overflow-hidden shadow-sm relative">
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[80px] rounded-full pointer-events-none"></div>
 
-        {/* Messages Layout */}
-        <div 
-          className="flex-1 p-4 md:p-6 space-y-6 overflow-y-auto custom-scrollbar relative z-10"
-        >
+        <div className="flex-1 p-4 md:p-6 space-y-6 overflow-y-auto custom-scrollbar relative z-10">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div 
-                className={msg.role === 'user' 
-                  ? "bg-[#1a1a1a] border border-[#2a2a2a] text-white px-5 py-4 rounded-3xl rounded-tr-sm max-w-[85%] md:max-w-[75%]" 
-                  : "bg-surface-elevated border border-border-dim text-white px-6 py-5 rounded-3xl rounded-tl-sm max-w-[90%] md:max-w-[85%] shadow-sm"
-                }
-              >
+              <div className={msg.role === 'user' 
+                ? "bg-[#1a1a1a] border border-[#2a2a2a] text-white px-5 py-4 rounded-3xl rounded-tr-sm max-w-[85%] md:max-w-[75%]" 
+                : "bg-surface-elevated border border-border-dim text-white px-6 py-5 rounded-3xl rounded-tl-sm max-w-[90%] md:max-w-[85%] shadow-sm"
+              }>
                 {msg.role === 'user' ? (
                   <div className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</div>
                 ) : (
@@ -200,7 +194,6 @@ export default function AIAgent() {
           <div ref={messagesEndRef} className="h-2" />
         </div>
 
-        {/* Input Area */}
         <div className="p-4 bg-surface z-10 w-full max-w-3xl mx-auto mb-2">
           <form 
             onSubmit={(e) => { e.preventDefault(); handleSend(); }}
@@ -212,9 +205,7 @@ export default function AIAgent() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  if (input.trim() && !isLoading) {
-                    handleSend();
-                  }
+                  if (input.trim() && !isLoading) handleSend();
                 }
               }}
               onInput={(e) => {
@@ -242,10 +233,7 @@ export default function AIAgent() {
                 <AnimatePresence>
                   {showModelDropdown && (
                     <>
-                      <div 
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowModelDropdown(false)}
-                      />
+                      <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)} />
                       <motion.div
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -257,10 +245,7 @@ export default function AIAgent() {
                           <button
                             type="button"
                             key={model.id}
-                            onClick={() => {
-                              setProvider(model.id as ModelProvider);
-                              setShowModelDropdown(false);
-                            }}
+                            onClick={() => { setProvider(model.id as ModelProvider); setShowModelDropdown(false); }}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-[#363636] transition-colors text-left"
                           >
                             <div className="flex items-center gap-2 sm:gap-3">
@@ -269,9 +254,7 @@ export default function AIAgent() {
                                 {model.name}
                               </span>
                             </div>
-                            {provider === model.id && (
-                              <Check className="w-4 h-4 text-blue-400" />
-                            )}
+                            {provider === model.id && <Check className="w-4 h-4 text-blue-400" />}
                           </button>
                         ))}
                       </motion.div>
