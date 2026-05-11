@@ -13,9 +13,9 @@ interface Message {
 
 type ModelProvider = 'Grok' | 'Gemini' | 'OpenRouter';
 
-const GROQ_API_KEY = "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";
-const GEMINI_API_KEY_OVERRIDE = "AIzaSyA9eug5ROm3Lw1VefSEGpuRHMGts-qjPWY";
-const OPENROUTER_API_KEY = "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";
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined);
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 
 const MODELS = [
   { id: 'Gemini', name: 'Gemini (Flash)', icon: '✨' },
@@ -61,8 +61,8 @@ export default function AIAgent() {
       let responseText = "";
 
       if (provider === 'Gemini') {
-        const apiKey = GEMINI_API_KEY_OVERRIDE || process.env.GEMINI_API_KEY;
-        if (!apiKey) throw new Error("GEMINI_API_KEY is missing.");
+        const apiKey = GEMINI_API_KEY;
+        if (!apiKey) throw new Error("GEMINI_API_KEY is missing. Please add VITE_GEMINI_API_KEY to your Vercel Environment Variables.");
         const ai = new GoogleGenAI({ apiKey });
         const response = await Promise.race([
           ai.models.generateContent({
@@ -74,6 +74,7 @@ export default function AIAgent() {
         responseText = response.text || "I'm sorry, I couldn't generate a response.";
       } else if (provider === 'Grok') {
         // Assume Groq API for Grok given the gsk_ prefix
+        if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is missing. Please add VITE_GROQ_API_KEY to your Vercel Environment Variables.");
         const groqMessages = [
           { role: 'system', content: systemPrompt },
           ...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
@@ -102,6 +103,7 @@ export default function AIAgent() {
         const data = await res.json();
         responseText = data.choices?.[0]?.message?.content || "No response received.";
       } else if (provider === 'OpenRouter') {
+        if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is missing. Please add VITE_OPENROUTER_API_KEY to your Vercel Environment Variables.");
         const orMessages = [
           { role: 'system', content: systemPrompt },
           ...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
@@ -114,6 +116,8 @@ export default function AIAgent() {
             headers: {
               'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
               'Content-Type': 'application/json',
+              'HTTP-Referer': window.location.origin,
+              'X-Title': 'Zenvex App'
             },
             body: JSON.stringify({
               model: "openai/gpt-oss-120b:free",
@@ -136,7 +140,7 @@ export default function AIAgent() {
       console.error("AI Agent error:", error);
       const errorMessage = error.message === "Timeout" 
         ? "The request took too long. Please try asking again." 
-        : "Sorry, I encountered an error connecting to the AI service. Please make sure the API key is configured correctly.";
+        : `Error: ${error.message || 'Unknown error occurred'}`;
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'model', 
