@@ -13,9 +13,10 @@ interface Message {
 
 type ModelProvider = 'Grok' | 'Gemini' | 'OpenRouter';
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || (typeof process !== 'undefined' ? process.env.GROQ_API_KEY : undefined);
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined);
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || (typeof process !== 'undefined' ? process.env.OPENROUTER_API_KEY : undefined);
+const SEARCH_API_KEY = import.meta.env.VITE_SEARCH_API_KEY || (typeof process !== 'undefined' ? process.env.SEARCH_API_KEY : undefined) || "9He1P5C4c8qLFxyoXwZyPiD5";
 
 const MODELS = [
   { id: 'Gemini', name: 'Gemini (Flash)', icon: '✨' },
