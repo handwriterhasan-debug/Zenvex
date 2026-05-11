@@ -1,0 +1,1335 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { AppState, DailyData, ExpenseItem, HabitItem, NoteItem, ScheduleItem, UserSettings, UserProfile, SavedSchedule, NotificationItem } from '../types';
+import { supabase } from '../supabaseClient';
+import { supabaseService } from '../supabaseService';
+
+interface AppContextType extends AppState {
+  syncError: string | null;
+  isStateLoaded: boolean;
+  updateSettings: (settings: Partial<UserSettings>) => void;
+  updateProfile: (profile: Partial<UserProfile>) => void;
+  applySubscription: (plan: 'Free' | 'Pro' | 'Premium', durationDays: number, coupon?: string) => void;
+  addSchedule: (item: ScheduleItem) => void;
+  updateSchedule: (id: string, updates: Partial<ScheduleItem>) => void;
+  reorderSchedule: (startIndex: number, endIndex: number) => void;
+  clearSchedule: () => void;
+  clearExpenses: () => void;
+  undoSchedule: () => void;
+  saveScheduleTemplate: (name: string, tasks: Omit<ScheduleItem, 'id' | 'status'>[]) => void;
+  loadScheduleTemplate: (id: string) => void;
+  deleteScheduleTemplate: (id: string) => void;
+  addHabit: (item: HabitItem) => void;
+  updateHabit: (id: string, updates: Partial<HabitItem>) => void;
+  toggleHabit: (id: string, dateStr?: string) => void;
+  addExpense: (item: ExpenseItem) => void;
+  updateExpense: (id: string, updates: Partial<ExpenseItem>) => void;
+  deleteExpense: (id: string) => void;
+  addNote: (item: NoteItem) => void;
+  deleteNote: (id: string) => void;
+  deleteHabit: (id: string) => void;
+  deleteScheduleTask: (id: string) => void;
+  enableDemoMode: () => void;
+  disableDemoMode: () => void;
+  checkAndResetDay: () => void;
+  addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
+  markNotificationRead: (id: string) => void;
+  clearNotifications: () => void;
+  resetState: () => void;
+  fetchExchangeRates: () => Promise<void>;
+  exchangeRatesOffline: boolean;
+}
+
+const defaultSettings: UserSettings = {
+  name: 'User',
+  dayEndTime: '23:59',
+  theme: 'dark',
+  initialBalance: 0,
+  savingsBalance: 0,
+  monthlyIncome: 0,
+  currency: 'PKR'
+};
+
+const defaultProfile: UserProfile = {
+  name: 'User',
+  gender: 'Not specified',
+  age: 'Not specified',
+  country: 'Not specified',
+  plan: 'Free'
+};
+
+// Helper to get logical date based on dayEndTime
+const getLogicalDate = (dayEndTime: string) => {
+  const now = new Date();
+  const [endHour, endMinute] = dayEndTime.split(':').map(Number);
+  
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  let targetDate = new Date(now);
+
+  // If day ends early morning (e.g., 04:00), times before that belong to previous day
+  if (endHour <= 12) {
+    if (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
+      targetDate.setDate(targetDate.getDate() - 1);
+    }
+  } else {
+    // If day ends late (e.g., 23:59), times after that belong to next day
+    if (currentHour > endHour || (currentHour === endHour && currentMinute >= endMinute)) {
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+  }
+
+  const y = targetDate.getFullYear();
+  const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const d = String(targetDate.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const defaultDailyData: DailyData = {
+  date: getLogicalDate('23:59'),
+  schedule: [],
+  habits: [],
+  expenses: [],
+  notes: [],
+};
+
+const defaultState: AppState = {
+  userSettings: defaultSettings,
+  userProfile: defaultProfile,
+  currentDayData: defaultDailyData,
+  history: [],
+  savedSchedules: [],
+  isDemoMode: false,
+  notifications: [],
+};
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [state, setState] = useState<AppState>(defaultState);
+  const [isStateLoaded, setIsStateLoaded] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [exchangeRatesOffline, setExchangeRatesOffline] = useState(false);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('https://open.er-api.com/v6/latest/USD');
+      if (!response.ok) throw new Error('Network response was not ok');
+      const data = await response.json();
+      const apiRates = data.conversion_rates || data.rates;
+      
+      // Override with user's specific rates to ensure exact match with their local exchange
+      const customRates = {
+        USD: 1,
+        PKR: 279.00,
+        GBP: 0.754074,
+        EUR: 0.863697,
+        SAR: 3.755047,
+        INR: 93.00,
+        AED: 3.672986,
+        CAD: 1.3811,
+        AUD: 1.438070
+      };
+
+      setState(prev => ({
+        ...prev,
+        exchangeRatesCache: {
+          rates: { ...apiRates, ...customRates },
+          lastUpdated: new Date().toISOString()
+        }
+      }));
+      setExchangeRatesOffline(false);
+    } catch (error) {
+      // Use fallback hardcoded rates based on user's table silently to avoid console logs
+      setState(prev => ({
+        ...prev,
+        exchangeRatesCache: {
+          rates: prev.exchangeRatesCache?.rates?.USD ? prev.exchangeRatesCache.rates : {
+            USD: 1,
+            PKR: 279.00,
+            GBP: 0.754074,
+            EUR: 0.863697,
+            SAR: 3.755047,
+            INR: 93.00,
+            AED: 3.672986,
+            CAD: 1.3811,
+            AUD: 1.438070
+          },
+          lastUpdated: new Date().toISOString()
+        }
+      }));
+      setExchangeRatesOffline(true);
+    }
+  };
+
+  useEffect(() => {
+    fetchExchangeRates();
+    const interval = setInterval(fetchExchangeRates, 30 * 60 * 1000); // 30 minutes
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let currentUserIdTracker: string | null = null;
+    
+    const loadState = async () => {
+      try {
+        // Check Supabase session with a timeout to prevent hanging
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise<{data: {session: any}}>((_, reject) => 
+          setTimeout(() => reject(new Error('Supabase getSession timeout')), 3000)
+        );
+        
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+        
+        if (session) {
+            currentUserIdTracker = session.user.id;
+        }
+        
+        if (!session) {
+          const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
+          // Fallback to local storage for guests
+          const saved = localStorage.getItem('makeYourFutureState');
+          if (isGuestMode && saved) {
+            const parsed = JSON.parse(saved);
+            if (!parsed.userSettings?.theme) parsed.userSettings = { ...parsed.userSettings, theme: 'dark' };
+            if (!parsed.userProfile) parsed.userProfile = defaultProfile;
+            if (!parsed.savedSchedules) parsed.savedSchedules = [];
+            if (!parsed.notifications) parsed.notifications = [];
+            if (!parsed.currentDayData) parsed.currentDayData = defaultDailyData;
+            if (!parsed.history) parsed.history = [];
+            setState(prev => ({ ...parsed, exchangeRatesCache: prev.exchangeRatesCache || parsed.exchangeRatesCache }));
+          } else {
+            setState(prev => ({ ...defaultState, exchangeRatesCache: prev.exchangeRatesCache }));
+          }
+          return;
+        }
+
+        // Load from Supabase
+        const loadedData = await supabaseService.loadUserData(session.user.id);
+
+        if (loadedData) {
+          if (loadedData.hasError) {
+             // Suppress partial load errors as they might be due to offline or missing tables
+             // setSyncError("Partial load error from database. Some data may be missing. Check your connection.");
+             console.error("Partial load error from DB arrays:", loadedData);
+          }
+          
+          const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
+          
+          let localState: AppState | null = null;
+          // Always try to load local state as a fallback
+          const saved = localStorage.getItem('makeYourFutureState');
+          if (saved) {
+            try { localState = JSON.parse(saved); } catch (e) {}
+          }
+
+          // If we have DB data, respect it first. 
+          const hasDbProfile = loadedData.profile && Object.keys(loadedData.profile).length > 0;
+          const hasDbSettings = loadedData.settings && Object.keys(loadedData.settings).length > 0;
+
+          const resolvedUserSettings = hasDbSettings ? {
+            ...defaultSettings,
+            ...loadedData.settings
+          } : {
+            ...defaultSettings,
+            ...localState?.userSettings
+          };
+
+          const resolvedUserProfile = hasDbProfile ? {
+            ...defaultProfile,
+            ...loadedData.profile
+          } : (localState?.userProfile || defaultProfile);
+
+          const currentLogicalDate = getLogicalDate(resolvedUserSettings.dayEndTime || '23:59');
+          
+          const safeArray = (dbArray: any[], localArray: any[] | undefined) => {
+             const local = localArray || [];
+             if (!dbArray || dbArray.length === 0) {
+               return local;
+             }
+             // Merge arrays by ID, favoring dbArray for conflicts, but keeping local-only items
+             // if they failed to sync recently.
+             const merged = [...dbArray];
+             const dbIds = new Set(dbArray.map(item => item.id));
+             for (const item of local) {
+               if (item.id && !dbIds.has(item.id)) {
+                 merged.push(item);
+               }
+             }
+             return merged;
+          };
+
+          // Find day data prioritizing existing local state if DB didn't find anything for today, or if local is richer
+          let baseCurrentDay = loadedData.history.find(h => h.date === currentLogicalDate) || localState?.currentDayData;
+          if (!baseCurrentDay) {
+            baseCurrentDay = {
+              date: currentLogicalDate,
+              schedule: [],
+              habits: safeArray(loadedData.habits, localState?.currentDayData?.habits).map(h => {
+                return { ...h, completedToday: h.completedToday !== undefined ? h.completedToday : false, streak: h.streak || 0 };
+              }),
+              expenses: [],
+              notes: []
+            };
+          } else if (localState?.currentDayData?.date === currentLogicalDate) {
+            // merge
+            baseCurrentDay = {
+               ...baseCurrentDay,
+               schedule: safeArray(baseCurrentDay.schedule, localState.currentDayData.schedule),
+               habits: safeArray(baseCurrentDay.habits, localState.currentDayData.habits),
+               expenses: safeArray(baseCurrentDay.expenses, localState.currentDayData.expenses),
+               notes: safeArray(baseCurrentDay.notes, localState.currentDayData.notes),
+            };
+          }
+
+          const loadedState: AppState = {
+            userSettings: resolvedUserSettings,
+            userProfile: resolvedUserProfile,
+            currentDayData: baseCurrentDay,
+            history: safeArray(loadedData.history, localState?.history).filter(h => h.date !== currentLogicalDate),
+            savedSchedules: safeArray(loadedData.savedSchedules, localState?.savedSchedules),
+            notifications: safeArray(loadedData.notifications, localState?.notifications),
+            isDemoMode: false
+          };
+
+          // Re-calculate all streaks dynamically based on completion history
+          // This ensures streaks are correct even if the 'streak' column in Supabase failed to update
+          const allDaysForStreak = [...loadedState.history, loadedState.currentDayData].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+          for (let i = 0; i < allDaysForStreak.length; i++) {
+            const currentDay = allDaysForStreak[i];
+            const [yYear, yMonthOrig, yDayOrig] = currentDay.date.split('-');
+            const yesterdayObj = new Date(Number(yYear), Number(yMonthOrig) - 1, Number(yDayOrig));
+            yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+            const yMonth = String(yesterdayObj.getMonth() + 1).padStart(2, '0');
+            const yDayNum = String(yesterdayObj.getDate()).padStart(2, '0');
+            const yesterdayStr = `${yesterdayObj.getFullYear()}-${yMonth}-${yDayNum}`;
+            
+            const prevDay = allDaysForStreak.find(d => d.date === yesterdayStr);
+
+            allDaysForStreak[i] = {
+              ...currentDay,
+              habits: currentDay.habits.map(h => {
+                const prevHabit = prevDay?.habits.find(ph => ph.id === h.id);
+                const prevStreak = prevHabit ? prevHabit.streak : 0;
+                const isToday = currentDay.date === currentLogicalDate;
+                let updatedStreak = 0;
+                if (h.completedToday) updatedStreak = prevStreak + 1;
+                else if (isToday) updatedStreak = prevStreak;
+                else updatedStreak = 0;
+                return { ...h, streak: updatedStreak };
+              })
+            };
+          }
+          loadedState.history = allDaysForStreak.filter(d => d.date !== currentLogicalDate);
+          loadedState.currentDayData = allDaysForStreak.find(d => d.date === currentLogicalDate) || loadedState.currentDayData;
+
+          // --- Cleanup Fake Data ---
+          // Remove "Hasan Test Schedule" template
+          const fakeTemplates = loadedState.savedSchedules.filter(s => s.name === 'Hasan Test Schedule');
+          loadedState.savedSchedules = loadedState.savedSchedules.filter(s => s.name !== 'Hasan Test Schedule');
+          
+          // Remove fake tasks from current day
+          const fakeTaskNames = ['blender work', 'client hunting and freelancing', 'iftari time', 'Ai agent and Saas', 'traweeh', 'wedding video edit'];
+          let fakeScheduleIds: string[] = [];
+          
+          if (loadedState.currentDayData?.schedule) {
+            const fakes = loadedState.currentDayData.schedule.filter(t => fakeTaskNames.includes(t.task));
+            fakeScheduleIds.push(...fakes.map(f => f.id));
+            loadedState.currentDayData.schedule = loadedState.currentDayData.schedule.filter(t => !fakeTaskNames.includes(t.task));
+          }
+          
+          // Remove fake tasks from history
+          if (loadedState.history) {
+            loadedState.history = loadedState.history.map(day => {
+              const fakes = day.schedule.filter(t => fakeTaskNames.includes(t.task));
+              fakeScheduleIds.push(...fakes.map(f => f.id));
+              return {
+                ...day,
+                schedule: day.schedule.filter(t => !fakeTaskNames.includes(t.task))
+              };
+            });
+          }
+          
+          // Delete from Supabase if they exist
+          if (fakeTemplates.length > 0) {
+            fakeTemplates.forEach(t => {
+              const updatedSchedules = loadedState.savedSchedules.filter(s => s.id !== t.id);
+              supabaseService.updateSavedSchedules(session.user.id, updatedSchedules).catch(() => {});
+            });
+          }
+          if (fakeScheduleIds.length > 0) {
+            fakeScheduleIds.forEach(id => supabaseService.deleteSchedule(id).catch(() => {}));
+          }
+          // -------------------------
+          
+          if (!loadedState.userSettings?.theme) loadedState.userSettings = { ...loadedState.userSettings, theme: 'dark' };
+          
+          const isNewUser = (!loadedData.profile || !loadedData.settings) && !loadedData.hasError;
+          if (isNewUser) {
+            try {
+              await supabaseService.updateSettings(session.user.id, loadedState.userSettings);
+              await supabaseService.updateProfile(session.user.id, loadedState.userProfile);
+              
+              // Migrate current day data
+              if (localState?.currentDayData) {
+                for (const s of localState.currentDayData.schedule) {
+                  await supabaseService.createSchedule(session.user.id, localState.currentDayData.date, s).catch(() => {});
+                }
+                for (const h of localState.currentDayData.habits) {
+                  await supabaseService.createHabit(session.user.id, h).catch(() => {});
+                  if (h.completedToday) {
+                    await supabaseService.upsertHabitLog(session.user.id, h.id, localState.currentDayData.date, true).catch(() => {});
+                  }
+                }
+                for (const e of localState.currentDayData.expenses) {
+                  await supabaseService.createExpense(session.user.id, localState.currentDayData.date, e).catch(() => {});
+                }
+                for (const n of localState.currentDayData.notes) {
+                  await supabaseService.createNote(session.user.id, localState.currentDayData.date, n).catch(() => {});
+                }
+              }
+              
+              // Migrate history
+              if (localState?.history) {
+                for (const day of localState.history) {
+                  for (const s of day.schedule) {
+                    await supabaseService.createSchedule(session.user.id, day.date, s).catch(() => {});
+                  }
+                  for (const h of day.habits) {
+                    if (h.completedToday) {
+                      await supabaseService.upsertHabitLog(session.user.id, h.id, day.date, true).catch(() => {});
+                    }
+                  }
+                  for (const e of day.expenses) {
+                    await supabaseService.createExpense(session.user.id, day.date, e).catch(() => {});
+                  }
+                  for (const n of day.notes) {
+                    await supabaseService.createNote(session.user.id, day.date, n).catch(() => {});
+                  }
+                }
+              }
+            } catch (e: any) {
+              console.error("Migration error:", e);
+              const { error: checkError } = await supabase.from('schedules').select('id').limit(1);
+              const tablesExist = !checkError || (!checkError.message?.includes('does not exist') && !checkError.message?.includes('schema cache'));
+              
+              let localSaveWorks = false;
+              try {
+                localStorage.setItem('test_sync', '1');
+                localStorage.removeItem('test_sync');
+                localSaveWorks = true;
+              } catch (err) {}
+
+              if (!tablesExist && !localSaveWorks) {
+                if (e.message?.includes('schema cache') || e.message?.includes('does not exist')) {
+                  setSyncError("Database tables are missing. Please run the SQL setup script in Supabase to enable cloud sync. Your data is saved locally.");
+                }
+              } else {
+                setSyncError(null);
+              }
+            }
+          }
+          
+          const date = currentLogicalDate;
+          const orderJson = localStorage.getItem(`zenvex_schedule_order_${date}`);
+          if (orderJson) {
+            try {
+              const order = JSON.parse(orderJson) as string[];
+              loadedState.currentDayData.schedule.sort((a, b) => {
+                let idxA = order.indexOf(a.id);
+                let idxB = order.indexOf(b.id);
+                if (idxA === -1) idxA = 9999;
+                if (idxB === -1) idxB = 9999;
+                if (idxA !== idxB) return idxA - idxB;
+                return a.timeStart.localeCompare(b.timeStart);
+              });
+            } catch (e) {}
+          } else {
+            loadedState.currentDayData.schedule.sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+          }
+
+          setState(prev => ({ ...loadedState, exchangeRatesCache: prev.exchangeRatesCache || loadedState.exchangeRatesCache }));
+        }
+      } catch (err: any) {
+        if (err.message !== 'Supabase getSession timeout') {
+          console.error('Failed to load state', err);
+        }
+        
+        let localSaveWorks = false;
+        try {
+          localStorage.setItem('test_sync', '1');
+          localStorage.removeItem('test_sync');
+          localSaveWorks = true;
+        } catch (e) {}
+
+        try {
+          // Add timeout to prevent hanging if Supabase is blocked
+          const checkPromise = supabase.from('schedules').select('id').limit(1);
+          const timeoutPromise = new Promise<any>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 3000)
+          );
+          const { error: checkError } = await Promise.race([checkPromise, timeoutPromise]);
+          const tablesExist = !checkError || (!checkError.message?.includes('does not exist') && !checkError.message?.includes('schema cache'));
+
+          if (!tablesExist && !localSaveWorks) {
+            if (err.message?.includes('schema cache') || err.message?.includes('does not exist')) {
+              setSyncError("Database tables are missing. Please run the SQL setup script in Supabase to enable cloud sync. Your data is saved locally.");
+            } else {
+              setSyncError(err.message);
+            }
+          } else {
+            setSyncError(null);
+          }
+        } catch (checkErr: any) {
+          if (checkErr.message !== 'Timeout') {
+            console.error('Supabase check failed or timed out', checkErr);
+          }
+          setSyncError(null);
+        }
+        
+        try {
+          const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
+          if (isGuestMode) {
+            const saved = localStorage.getItem('makeYourFutureState');
+            if (saved) setState(prev => ({ ...JSON.parse(saved), exchangeRatesCache: prev.exchangeRatesCache }));
+          } else {
+            setSyncError(err.message || 'Failed to sync with cloud. Try refreshing.');
+          }
+        } catch (e) {
+          console.error('Failed to parse local storage state', e);
+        }
+      } finally {
+        setIsStateLoaded(true);
+      }
+    };
+
+    loadState();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        if (session && session.user.id !== currentUserIdTracker) {
+            loadState();
+        }
+      } else if (event === 'SIGNED_OUT') {
+        currentUserIdTracker = null;
+        localStorage.removeItem('makeYourFutureState');
+        setState(defaultState);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const resetState = () => {
+    localStorage.removeItem('makeYourFutureState');
+    setState(prev => ({ ...defaultState, exchangeRatesCache: prev.exchangeRatesCache }));
+  };
+
+  useEffect(() => {
+    if (!isStateLoaded) return;
+
+    localStorage.setItem('makeYourFutureState', JSON.stringify(state));
+    
+    // Apply theme to body and html
+    if (state.userSettings.theme === 'light') {
+      document.body.classList.add('light-theme');
+      document.documentElement.classList.add('light-theme');
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.body.classList.remove('light-theme');
+      document.documentElement.classList.remove('light-theme');
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }, [state, isStateLoaded]);
+
+  const checkAndResetDay = () => {
+    setState((prev) => {
+      const currentLogicalDate = getLogicalDate(prev.userSettings.dayEndTime);
+      let hasChanges = false;
+      let nextState = { ...prev };
+      
+      // Check subscription expiration
+      if (nextState.userProfile.plan !== 'Free' && nextState.userProfile.subscriptionEndDate) {
+        const endDate = new Date(nextState.userProfile.subscriptionEndDate);
+        if (new Date() > endDate) {
+          nextState.userProfile = {
+            ...nextState.userProfile,
+            plan: 'Free',
+            subscriptionStartDate: undefined,
+            subscriptionEndDate: undefined
+          };
+          hasChanges = true;
+        }
+      }
+
+      if (prev.currentDayData.date !== currentLogicalDate) {
+        // Day has changed! Archive current day to history, but check if we already have data for the new date
+        // First, update or add the current day into history
+        const existingHistoryIdx = prev.history.findIndex(h => h.date === prev.currentDayData.date);
+        let newHistory = [...prev.history];
+        if (existingHistoryIdx !== -1) {
+          newHistory[existingHistoryIdx] = prev.currentDayData;
+        } else {
+          newHistory.push(prev.currentDayData);
+        }
+
+        // Now, extract or initialize the new current day
+        const existingNewDayIdx = newHistory.findIndex(h => h.date === currentLogicalDate);
+        let newCurrentDayData: DailyData;
+        
+        if (existingNewDayIdx !== -1) {
+          newCurrentDayData = newHistory[existingNewDayIdx];
+          newHistory.splice(existingNewDayIdx, 1);
+        } else {
+          // Initialize a clean start for the new day
+          // Keep habits but reset completion
+          const newHabits = prev.currentDayData.habits.map(h => ({
+            ...h,
+            completedToday: false,
+            // If it was completed yesterday (or the previous active day), streak is maintained, else it resets
+            streak: h.completedToday ? h.streak : 0 
+          }));
+
+          newCurrentDayData = {
+            date: currentLogicalDate,
+            schedule: [],
+            habits: newHabits,
+            expenses: [],
+            notes: [],
+          };
+        }
+
+        nextState = {
+          ...nextState,
+          history: newHistory,
+          currentDayData: newCurrentDayData
+        };
+        hasChanges = true;
+      }
+      
+      return hasChanges ? nextState : prev;
+    });
+  };
+
+  // Check for reset on mount and every minute
+  useEffect(() => {
+    checkAndResetDay();
+    const interval = setInterval(checkAndResetDay, 60000);
+    return () => clearInterval(interval);
+  }, [state.userSettings.dayEndTime]);
+
+  const addNotification = async (notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => {
+    const newNotif = {
+      ...notification,
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    setState(prev => ({
+      ...prev,
+      notifications: [newNotif, ...prev.notifications].slice(0, 50)
+    }));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await supabase.from('notifications').insert({
+        id: newNotif.id, user_id: session.user.id, title: newNotif.title, message: newNotif.message,
+        type: newNotif.type, timestamp: newNotif.timestamp, read: newNotif.read
+      });
+    }
+  };
+
+  const markNotificationRead = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      notifications: prev.notifications.map(n => n.id === id ? { ...n, read: true } : n)
+    }));
+    await supabase.from('notifications').update({ read: true }).eq('id', id);
+  };
+
+  const clearNotifications = async () => {
+    setState(prev => ({ ...prev, notifications: [] }));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await supabase.from('notifications').delete().eq('user_id', session.user.id);
+  };
+
+  const updateSettings = async (settings: Partial<UserSettings>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    setState(prev => {
+      const newSettings = { ...prev.userSettings, ...settings };
+      
+      // Save to Supabase in the background
+      if (session) {
+        supabaseService.updateSettings(session.user.id, newSettings).catch(console.error);
+      }
+      
+      return { ...prev, userSettings: newSettings };
+    });
+  };
+
+  const updateProfile = async (profile: Partial<UserProfile>) => {
+    let newProfile: UserProfile | null = null;
+    let newSettings: UserSettings | null = null;
+    setState(prev => {
+      newProfile = { ...prev.userProfile, ...profile };
+      const updates: any = { userProfile: newProfile };
+      if (profile.name) {
+        newSettings = { ...prev.userSettings, name: profile.name };
+        updates.userSettings = newSettings;
+      }
+      return { ...prev, ...updates };
+    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && newProfile) {
+      await supabaseService.updateProfile(session.user.id, newProfile);
+      if (newSettings) {
+        await supabaseService.updateSettings(session.user.id, newSettings);
+      }
+    }
+  };
+
+  const applySubscription = async (plan: 'Free' | 'Pro' | 'Premium', durationDays: number, coupon?: string) => {
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + durationDays);
+    
+    let newProfile: UserProfile | null = null;
+    setState(prev => {
+      newProfile = {
+        ...prev.userProfile,
+        plan,
+        subscriptionStartDate: start.toISOString(),
+        subscriptionEndDate: end.toISOString(),
+        usedCoupon: coupon
+      };
+      return { ...prev, userProfile: newProfile };
+    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && newProfile) await supabaseService.updateProfile(session.user.id, newProfile);
+  };
+
+  const saveScheduleTemplate = async (name: string, tasks: Omit<ScheduleItem, 'id' | 'status'>[]) => {
+    const newTemplate = { id: crypto.randomUUID(), name, tasks };
+    setState(prev => ({
+      ...prev,
+      savedSchedules: [...prev.savedSchedules, newTemplate]
+    }));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await supabase.from('saved_schedules').insert({
+        id: newTemplate.id, user_id: session.user.id, name: newTemplate.name, tasks: newTemplate.tasks
+      });
+    }
+  };
+
+  const loadScheduleTemplate = async (id: string) => {
+    let newTasks: ScheduleItem[] = [];
+    let date = '';
+    setState(prev => {
+      const template = prev.savedSchedules.find(s => s.id === id);
+      if (!template) return prev;
+      
+      newTasks = template.tasks.map((t) => ({
+        ...t,
+        id: crypto.randomUUID(),
+        status: 'pending'
+      }));
+      date = prev.currentDayData.date;
+
+      return {
+        ...prev,
+        currentDayData: {
+          ...prev.currentDayData,
+          schedule: [...prev.currentDayData.schedule, ...newTasks]
+        }
+      };
+    });
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && newTasks.length > 0) {
+      for (const task of newTasks) {
+        await supabaseService.createSchedule(session.user.id, date, task);
+      }
+    }
+  };
+
+  const deleteScheduleTemplate = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      savedSchedules: prev.savedSchedules.filter(s => s.id !== id)
+    }));
+    await supabase.from('saved_schedules').delete().eq('id', id);
+  };
+
+  const addSchedule = async (item: ScheduleItem) => {
+    let date = '';
+    setState(prev => {
+      date = prev.currentDayData.date;
+      const newSchedule = [...prev.currentDayData.schedule, item];
+      
+      const orderJson = localStorage.getItem(`zenvex_schedule_order_${date}`);
+      if (orderJson) {
+        try {
+          const order = JSON.parse(orderJson) as string[];
+          newSchedule.sort((a, b) => {
+            let idxA = order.indexOf(a.id);
+            let idxB = order.indexOf(b.id);
+            if (idxA === -1) idxA = 9999;
+            if (idxB === -1) idxB = 9999;
+            if (idxA !== idxB) return idxA - idxB;
+            return a.timeStart.localeCompare(b.timeStart);
+          });
+        } catch (e) {}
+      } else {
+        newSchedule.sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+      }
+
+      return {
+        ...prev,
+        currentDayData: { ...prev.currentDayData, schedule: newSchedule }
+      };
+    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await supabaseService.createSchedule(session.user.id, date, item).catch(e => setSyncError("Failed to save task: " + e.message));
+  };
+
+  const reorderSchedule = (startIndex: number, endIndex: number) => {
+    setState(prev => {
+      const newSchedule = Array.from(prev.currentDayData.schedule);
+      const [removed] = newSchedule.splice(startIndex, 1);
+      newSchedule.splice(endIndex, 0, removed);
+      
+      // Save order to localStorage
+      const order = newSchedule.map(s => s.id);
+      localStorage.setItem(`zenvex_schedule_order_${prev.currentDayData.date}`, JSON.stringify(order));
+
+      return {
+        ...prev,
+        currentDayData: {
+          ...prev.currentDayData,
+          schedule: newSchedule
+        }
+      };
+    });
+  };
+
+  const updateDisciplineScore = async (stateData: AppState) => {
+    const today = stateData.currentDayData;
+    const totalTasks = today.schedule.length;
+    const completedTasks = today.schedule.filter(s => s.status === 'completed').length;
+    const totalHabits = today.habits.length;
+    const completedHabits = today.habits.filter(h => h.completedToday).length;
+
+    let taskScore = 0;
+    let habitScore = 0;
+
+    if (totalTasks > 0 && totalHabits > 0) {
+      taskScore = (completedTasks / totalTasks) * 50;
+      habitScore = (completedHabits / totalHabits) * 50;
+    } else if (totalTasks > 0) {
+      taskScore = (completedTasks / totalTasks) * 100;
+    } else if (totalHabits > 0) {
+      habitScore = (completedHabits / totalHabits) * 100;
+    } else {
+      taskScore = 100;
+    }
+
+    const hasValidExcuse = today.schedule.some(s => s.status !== 'completed' && s.excuse) || 
+                           today.notes.some(n => n.isExcuse);
+
+    if (hasValidExcuse) {
+      if (totalTasks > 0 && totalHabits > 0) {
+        taskScore = Math.max(taskScore, 40);
+        habitScore = Math.max(habitScore, 40);
+      } else if (totalTasks > 0) {
+        taskScore = Math.max(taskScore, 80);
+      } else if (totalHabits > 0) {
+        habitScore = Math.max(habitScore, 80);
+      }
+    }
+
+    const disciplineScore = Math.max(0, Math.round(taskScore + habitScore));
+    
+    if (stateData.userProfile.disciplineScore !== disciplineScore) {
+      await updateProfile({ disciplineScore });
+    }
+  };
+
+  const updateSchedule = async (id: string, updates: Partial<ScheduleItem>) => {
+    let taskName = '';
+    let isCompleting = false;
+    let newState: AppState | null = null;
+    
+    setState(prev => {
+      const task = prev.currentDayData.schedule.find(s => s.id === id);
+      isCompleting = updates.status === 'completed' && task?.status !== 'completed';
+      if (task) taskName = task.task;
+
+      newState = {
+        ...prev,
+        currentDayData: {
+          ...prev.currentDayData,
+          schedule: prev.currentDayData.schedule.map(s => s.id === id ? { ...s, ...updates } : s)
+        }
+      };
+
+      const date = prev.currentDayData.date;
+      const orderJson = localStorage.getItem(`zenvex_schedule_order_${date}`);
+      if (orderJson) {
+        try {
+          const order = JSON.parse(orderJson) as string[];
+          newState.currentDayData.schedule.sort((a, b) => {
+            let idxA = order.indexOf(a.id);
+            let idxB = order.indexOf(b.id);
+            if (idxA === -1) idxA = 9999;
+            if (idxB === -1) idxB = 9999;
+            if (idxA !== idxB) return idxA - idxB;
+            return a.timeStart.localeCompare(b.timeStart);
+          });
+        } catch (e) {}
+      } else {
+        newState.currentDayData.schedule.sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+      }
+
+      return newState;
+    });
+    
+    if (isCompleting) {
+      await addNotification({
+        title: 'Task Completed!',
+        message: `Great job completing "${taskName}"! Keep up the good work.`,
+        type: 'success'
+      });
+    }
+    
+    await supabaseService.updateSchedule(id, updates);
+    if (newState) await updateDisciplineScore(newState);
+  };
+
+  const clearSchedule = async () => {
+    let deletedIds: string[] = [];
+    setState(prev => {
+      deletedIds = prev.currentDayData.schedule.map(s => s.id);
+      return {
+        ...prev,
+        previousSchedule: prev.currentDayData.schedule,
+        currentDayData: { ...prev.currentDayData, schedule: [] }
+      };
+    });
+    for (const id of deletedIds) {
+      await supabaseService.deleteSchedule(id);
+    }
+  };
+
+  const clearExpenses = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    let deletedIds: string[] = [];
+    setState(prev => {
+      deletedIds = prev.currentDayData.expenses.map(e => e.id);
+      prev.history.forEach(day => {
+        deletedIds.push(...(day.expenses || []).map(e => e.id));
+      });
+      
+      const newSettings = {
+        ...prev.userSettings,
+        initialBalance: 0,
+        savingsBalance: 0,
+        monthlyIncome: 0,
+        initialExpenses: 0
+      };
+
+      return {
+        ...prev,
+        userSettings: newSettings,
+        currentDayData: { ...prev.currentDayData, expenses: [] },
+        history: prev.history.map(day => ({ ...day, expenses: [] }))
+      };
+    });
+    
+    // Update settings in DB
+    if (session) {
+      await supabaseService.updateSettings(session.user.id, {
+        ...state.userSettings,
+        initialBalance: 0,
+        savingsBalance: 0,
+        monthlyIncome: 0,
+        initialExpenses: 0
+      }).catch(console.error);
+    }
+
+    for (const id of deletedIds) {
+      await supabaseService.deleteExpense(id).catch(console.error);
+    }
+  };
+
+  const undoSchedule = async () => {
+    let restoredTasks: ScheduleItem[] = [];
+    let date = '';
+    setState(prev => {
+      if (!prev.previousSchedule) return prev;
+      restoredTasks = prev.previousSchedule;
+      date = prev.currentDayData.date;
+      return {
+        ...prev,
+        currentDayData: { ...prev.currentDayData, schedule: prev.previousSchedule },
+        previousSchedule: undefined
+      };
+    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && restoredTasks.length > 0) {
+      for (const task of restoredTasks) {
+        await supabaseService.createSchedule(session.user.id, date, task);
+      }
+    }
+  };
+
+  const addHabit = async (item: HabitItem) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: { ...prev.currentDayData, habits: [...prev.currentDayData.habits, item] }
+    }));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await supabaseService.createHabit(session.user.id, item).catch(e => setSyncError("Failed to save habit: " + e.message));
+  };
+
+  const updateHabit = async (id: string, updates: Partial<HabitItem>) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: {
+        ...prev.currentDayData,
+        habits: prev.currentDayData.habits.map(h => h.id === id ? { ...h, ...updates } : h)
+      }
+    }));
+    await supabaseService.updateHabit(id, updates);
+  };
+
+  const toggleHabit = async (id: string, dateStr?: string) => {
+    let targetDate = '';
+    let isCompleted = false;
+    let newStreak = 0;
+    
+    let newState: AppState | null = null;
+    
+    setState(prev => {
+      targetDate = dateStr || prev.currentDayData.date;
+      let allDays = [...prev.history, prev.currentDayData]
+        .filter(Boolean)
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      
+      let toggleIdx = allDays.findIndex(d => d.date === targetDate);
+      
+      if (toggleIdx === -1) {
+        // Create missing day
+        const missingDay: DailyData = {
+          date: targetDate,
+          schedule: [],
+          habits: prev.currentDayData.habits.map(h => ({ ...h, completedToday: false, streak: 0 })),
+          expenses: [],
+          notes: []
+        };
+        allDays.push(missingDay);
+        allDays.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        toggleIdx = allDays.findIndex(d => d.date === targetDate);
+      }
+
+      const dayToToggle = allDays[toggleIdx];
+      const currentHabitTemplate = prev.currentDayData.habits.find(h => h.id === id);
+      if (!currentHabitTemplate) return prev;
+
+      let habitExists = dayToToggle.habits.some(h => h.id === id);
+      let newHabits = [...dayToToggle.habits];
+      
+      if (!habitExists) {
+        newHabits.push({
+          ...currentHabitTemplate,
+          completedToday: true,
+          streak: 0
+        });
+      } else {
+        newHabits = newHabits.map(h =>
+          h.id === id ? { ...h, completedToday: !h.completedToday } : h
+        );
+      }
+      
+      allDays[toggleIdx] = { ...dayToToggle, habits: newHabits };
+
+      // Recalculate streaks
+      for (let i = 0; i < allDays.length; i++) {
+        const currentDay = allDays[i];
+        
+        // Find if true 'yesterday' exists to carry over streak
+        const [yYear, yMonthOrig, yDayOrig] = currentDay.date.split('-');
+        const yesterdayObj = new Date(Number(yYear), Number(yMonthOrig) - 1, Number(yDayOrig));
+        yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+        const yMonth = String(yesterdayObj.getMonth() + 1).padStart(2, '0');
+        const yDayNum = String(yesterdayObj.getDate()).padStart(2, '0');
+        const yesterdayStr = `${yesterdayObj.getFullYear()}-${yMonth}-${yDayNum}`;
+        
+        const prevDay = allDays.find(d => d.date === yesterdayStr);
+
+        allDays[i] = {
+          ...currentDay,
+          habits: currentDay.habits.map(h => {
+            if (h.id === id) {
+              const prevHabit = prevDay?.habits.find(ph => ph.id === id);
+              const prevStreak = prevHabit ? prevHabit.streak : 0;
+              
+              const isToday = currentDay.date === prev.currentDayData.date;
+              let updatedStreak = 0;
+              
+              if (h.completedToday) {
+                updatedStreak = prevStreak + 1;
+              } else if (isToday) {
+                // If it's today and not completed yet, retain yesterday's streak
+                updatedStreak = prevStreak;
+              } else {
+                // Past day not completed breaks the streak
+                updatedStreak = 0;
+              }
+
+              if (currentDay.date === targetDate) {
+                isCompleted = h.completedToday;
+                newStreak = updatedStreak; // Keep track of the streak to update in DB
+              }
+              return {
+                ...h,
+                streak: updatedStreak
+              };
+            }
+            return h;
+          })
+        };
+      }
+
+      const newCurrentDayData = allDays.find(d => d.date === prev.currentDayData.date)!;
+      const newHistory = allDays.filter(d => d.date !== prev.currentDayData.date);
+
+      const updatedHabit = newCurrentDayData.habits.find(h => h.id === id);
+      if (updatedHabit?.completedToday && !currentHabitTemplate.completedToday) {
+        setTimeout(() => {
+          addNotification({
+            title: 'Habit Completed!',
+            message: `You completed "${updatedHabit.name}". Current streak: ${updatedHabit.streak} days!`,
+            type: 'success'
+          });
+        }, 0);
+      }
+
+      // the streak saved to db should always reflect its latest state correctly
+      if (updatedHabit) {
+        newStreak = updatedHabit.streak;
+      }
+
+      newState = {
+        ...prev,
+        history: newHistory,
+        currentDayData: newCurrentDayData
+      };
+      return newState;
+    });
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && targetDate) {
+      Promise.all([
+        supabaseService.upsertHabitLog(session.user.id, id, targetDate, isCompleted),
+        supabaseService.updateHabit(id, { streak: newStreak })
+      ]).catch(e => setSyncError("Failed to save habit: " + e.message));
+    }
+    if (newState) await updateDisciplineScore(newState);
+  };
+
+  const addExpense = async (item: ExpenseItem) => {
+    let date = '';
+    setState(prev => {
+      date = prev.currentDayData.date;
+      return {
+        ...prev,
+        currentDayData: { ...prev.currentDayData, expenses: [...prev.currentDayData.expenses, item] }
+      };
+    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await supabaseService.createExpense(session.user.id, date, item).catch(e => setSyncError("Failed to save expense: " + e.message));
+  };
+
+  const updateExpense = async (id: string, updates: Partial<ExpenseItem>) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: {
+        ...prev.currentDayData,
+        expenses: prev.currentDayData.expenses.map(e => e.id === id ? { ...e, ...updates } : e)
+      }
+    }));
+    await supabaseService.updateExpense(id, updates);
+  };
+
+  const addNote = async (item: NoteItem) => {
+    let date = '';
+    let shouldAdd = true;
+    setState(prev => {
+      // SaaS Logic: Free users can only create 3 notes total
+      let totalNotes = prev.currentDayData.notes.length;
+      prev.history.forEach(day => {
+        totalNotes += (day.notes || []).length;
+      });
+
+      if (prev.userProfile.plan === 'Free' && totalNotes >= 3) {
+        alert("Free plan limit reached. Upgrade to Pro to create unlimited notes.");
+        shouldAdd = false;
+        return prev;
+      }
+      date = prev.currentDayData.date;
+      return {
+        ...prev,
+        currentDayData: { ...prev.currentDayData, notes: [...prev.currentDayData.notes, item] }
+      };
+    });
+    
+    if (shouldAdd) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) await supabaseService.createNote(session.user.id, date, item).catch(e => setSyncError("Failed to save note: " + e.message));
+    }
+  };
+
+  const deleteExpense = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: { ...prev.currentDayData, expenses: prev.currentDayData.expenses.filter(e => e.id !== id) }
+    }));
+    await supabaseService.deleteExpense(id);
+  };
+
+  const deleteNote = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: { ...prev.currentDayData, notes: prev.currentDayData.notes.filter(n => n.id !== id) }
+    }));
+    await supabaseService.deleteNote(id);
+  };
+
+  const deleteHabit = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: { ...prev.currentDayData, habits: prev.currentDayData.habits.filter(h => h.id !== id) }
+    }));
+    await supabaseService.deleteHabit(id);
+  };
+
+  const deleteScheduleTask = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: { ...prev.currentDayData, schedule: prev.currentDayData.schedule.filter(s => s.id !== id) }
+    }));
+    await supabaseService.deleteSchedule(id);
+  };
+
+  const enableDemoMode = () => {
+    const demoDate = getLogicalDate(state.userSettings.dayEndTime);
+    setState(prev => ({
+      ...prev,
+      isDemoMode: true,
+      userSettings: { ...prev.userSettings, name: 'Hasan (Demo)' },
+      currentDayData: {
+        date: demoDate,
+        schedule: [
+          { id: '1', timeStart: '09:00', timeEnd: '11:00', task: 'Deep Work: Coding', category: 'Work', status: 'completed' },
+          { id: '2', timeStart: '11:30', timeEnd: '12:30', task: 'Gym Session', category: 'Fitness', status: 'completed' },
+          { id: '3', timeStart: '13:00', timeEnd: '14:00', task: 'Lunch & Reading', category: 'Rest', status: 'completed' },
+          { id: '4', timeStart: '15:30', timeEnd: '17:30', task: 'Blender Work', category: 'Work', status: 'in-progress' },
+          { id: '5', timeStart: '18:00', timeEnd: '20:00', task: 'AI Learning', category: 'Learning', status: 'pending' },
+        ],
+        habits: [
+          { id: '1', name: 'Gym', category: 'Fitness', streak: 14, target: 30, completedToday: true, color: 'bg-emerald-500' },
+          { id: '2', name: 'AI Learning', category: 'Learning', streak: 9, target: 30, completedToday: false, color: 'bg-blue-500' },
+          { id: '3', name: 'Reading', category: 'Learning', streak: 21, target: 30, completedToday: true, color: 'bg-purple-500' },
+          { id: '4', name: 'Coding', category: 'Work', streak: 45, target: 100, completedToday: true, color: 'bg-[#ff2a2a]' },
+        ],
+        expenses: [
+          { id: '1', title: 'Food', amount: 500, type: 'expense', category: 'Food', timestamp: new Date().toISOString() },
+          { id: '2', title: 'Transport', amount: 200, type: 'expense', category: 'Transport', timestamp: new Date().toISOString() },
+          { id: '3', title: 'Salary', amount: 50000, type: 'income', category: 'Salary', timestamp: new Date().toISOString() },
+        ],
+        notes: [
+          { id: '1', title: 'Why editing took longer today', content: 'I got distracted by trying to find the perfect B-roll. Next time, I need to...', tags: ['Reflection', 'Editing'], timestamp: new Date().toISOString() },
+          { id: '2', title: 'What went well today', content: 'Woke up at 4 AM and completed the hardest coding task before 8 AM. The...', tags: ['Win', 'Deep Work'], timestamp: new Date(Date.now() - 86400000).toISOString() },
+        ]
+      },
+      // Add some fake history for analytics
+      history: Array.from({ length: 30 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (30 - i));
+        return {
+          date: d.toISOString().split('T')[0],
+          schedule: [
+            { id: '1', timeStart: '09:00', timeEnd: '11:00', task: 'Work', category: 'Work', status: 'completed' }
+          ],
+          habits: [
+            { id: '1', name: 'Gym', category: 'Fitness', streak: 1, target: 30, completedToday: Math.random() > 0.2, color: 'bg-emerald-500' }
+          ],
+          expenses: [
+            { id: '1', title: 'Food', amount: 500, type: 'expense', category: 'Food', timestamp: d.toISOString() }
+          ],
+          notes: []
+        };
+      })
+    }));
+  };
+
+  const disableDemoMode = () => {
+    setState(prev => prev.isDemoMode ? { ...defaultState, exchangeRatesCache: prev.exchangeRatesCache } : prev);
+  };
+
+  return (
+    <AppContext.Provider value={{
+      ...state,
+      syncError,
+      isStateLoaded,
+      updateSettings,
+      updateProfile,
+      applySubscription,
+      addSchedule,
+      updateSchedule,
+      reorderSchedule,
+      clearSchedule,
+      clearExpenses,
+      undoSchedule,
+      saveScheduleTemplate,
+      loadScheduleTemplate,
+      deleteScheduleTemplate,
+      addHabit,
+      updateHabit,
+      toggleHabit,
+      addExpense,
+      updateExpense,
+      deleteExpense,
+      addNote,
+      deleteNote,
+      deleteHabit,
+      deleteScheduleTask,
+      enableDemoMode,
+      disableDemoMode,
+      checkAndResetDay,
+      addNotification,
+      markNotificationRead,
+      clearNotifications,
+      resetState,
+      fetchExchangeRates,
+      exchangeRatesOffline
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useAppContext = () => {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useAppContext must be used within an AppProvider');
+  }
+  return context;
+};
