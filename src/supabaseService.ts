@@ -15,15 +15,12 @@ export const supabaseService = {
       }
     };
 
-    let profileReq = await safeFetch(supabase.from('profiles').select('*').eq('id', userId).maybeSingle());
-    if (profileReq.error && (profileReq.error.code === 'PGRST116' || profileReq.error.code === '42P01' || profileReq.error.message?.includes('relation'))) {
-      const fallback = await safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle());
-      if (!fallback.error) profileReq = fallback;
-    }
+    let profileReq = await safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle());
+    let settingsReq = await safeFetch(supabase.from('user_settings').select('*').eq('id', userId).maybeSingle());
 
     const fetches = await Promise.all([
       Promise.resolve(profileReq),
-      safeFetch(supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle()),
+      Promise.resolve(settingsReq),
       safeFetch(supabase.from('schedules').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habit_logs').select('*').eq('user_id', userId)),
@@ -180,13 +177,17 @@ export const supabaseService = {
         country: actualProfile.country || 'Not specified',
         plan: actualProfile.plan || 'Free',
         disciplineScore: actualProfile.discipline_score ? Number(actualProfile.discipline_score) : 0,
-        avatarUrl: actualProfile.avatar_url
+        avatarUrl: actualProfile.avatar_url,
+        subscriptionStartDate: actualProfile.subscription_start_date,
+        subscriptionEndDate: actualProfile.subscription_end_date,
+        usedCoupon: actualProfile.used_coupon
       } : undefined,
       settings: settings && Object.keys(settings).length > 0 ? {
         name: settings.name || 'User',
         dayEndTime: settings.day_end_time || '23:59',
         theme: settings.theme || 'dark',
         initialBalance: settings.initial_balance ? Number(settings.initial_balance) : 0,
+        initialExpenses: settings.initial_expenses ? Number(settings.initial_expenses) : 0,
         savingsBalance: settings.savings_balance ? Number(settings.savings_balance) : 0,
         monthlyIncome: settings.monthly_income ? Number(settings.monthly_income) : 0,
         currency: settings.currency || 'USD'
@@ -435,21 +436,18 @@ export const supabaseService = {
     if (updates.plan !== undefined) dbUpdates.plan = updates.plan;
     if (updates.disciplineScore !== undefined) dbUpdates.discipline_score = updates.disciplineScore;
     if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
+    if (updates.subscriptionStartDate !== undefined) dbUpdates.subscription_start_date = updates.subscriptionStartDate;
+    if (updates.subscriptionEndDate !== undefined) dbUpdates.subscription_end_date = updates.subscriptionEndDate;
+    if (updates.usedCoupon !== undefined) dbUpdates.used_coupon = updates.usedCoupon;
 
-    let { data: existing, error: existError } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
-    let tableName = 'profiles';
-    if (existError && (existError.code === '42P01' || existError.message?.includes('relation'))) {
-      tableName = 'user_profiles';
-      const fallback = await supabase.from('user_profiles').select('id').eq('id', userId).maybeSingle();
-      existing = fallback.data;
-    }
+    const { data: existing } = await supabase.from('user_profiles').select('id').eq('id', userId).maybeSingle();
 
     if (!existing) {
-       await supabase.from(tableName).insert({ id: userId, ...dbUpdates });
+       await supabase.from('user_profiles').insert({ id: userId, ...dbUpdates });
        return;
     }
 
-    const { data, error } = await supabase.from(tableName).update(dbUpdates).eq('id', userId).select().single();
+    const { data, error } = await supabase.from('user_profiles').update(dbUpdates).eq('id', userId).select().single();
     if (error) throw error;
     return data;
   },
@@ -460,17 +458,18 @@ export const supabaseService = {
     if (updates.dayEndTime !== undefined) dbUpdates.day_end_time = updates.dayEndTime;
     if (updates.theme !== undefined) dbUpdates.theme = updates.theme;
     if (updates.initialBalance !== undefined) dbUpdates.initial_balance = updates.initialBalance;
+    if (updates.initialExpenses !== undefined) dbUpdates.initial_expenses = updates.initialExpenses;
     if (updates.savingsBalance !== undefined) dbUpdates.savings_balance = updates.savingsBalance;
     if (updates.monthlyIncome !== undefined) dbUpdates.monthly_income = updates.monthlyIncome;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
 
-    const { data: existing } = await supabase.from('user_settings').select('user_id').eq('user_id', userId).single();
+    const { data: existing } = await supabase.from('user_settings').select('id').eq('id', userId).maybeSingle();
     if (!existing) {
-       await supabase.from('user_settings').insert({ user_id: userId, ...dbUpdates });
+       await supabase.from('user_settings').insert({ id: userId, ...dbUpdates });
        return;
     }
 
-    const { data, error } = await supabase.from('user_settings').update(dbUpdates).eq('user_id', userId).select().single();
+    const { data, error } = await supabase.from('user_settings').update(dbUpdates).eq('id', userId).select().single();
     if (error) throw error;
     return data;
   },

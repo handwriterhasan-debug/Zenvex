@@ -228,11 +228,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             try { localState = JSON.parse(saved); } catch (e) {}
           }
 
-          const resolvedUserSettings = {
-            ...(loadedData.settings || localState?.userSettings || defaultSettings),
-            initialExpenses: localState?.userSettings?.initialExpenses || 0
+          // If we have DB data, respect it first. 
+          const hasDbProfile = loadedData.profile && Object.keys(loadedData.profile).length > 0;
+          const hasDbSettings = loadedData.settings && Object.keys(loadedData.settings).length > 0;
+
+          const resolvedUserSettings = hasDbSettings ? {
+            ...defaultSettings,
+            ...loadedData.settings
+          } : {
+            ...defaultSettings,
+            ...localState?.userSettings
           };
-          
+
+          const resolvedUserProfile = hasDbProfile ? {
+            ...defaultProfile,
+            ...loadedData.profile
+          } : (localState?.userProfile || defaultProfile);
+
           const currentLogicalDate = getLogicalDate(resolvedUserSettings.dayEndTime || '23:59');
           
           const safeArray = (dbArray: any[], localArray: any[] | undefined) => {
@@ -277,7 +289,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           const loadedState: AppState = {
             userSettings: resolvedUserSettings,
-            userProfile: loadedData.profile || localState?.userProfile || defaultProfile,
+            userProfile: resolvedUserProfile,
             currentDayData: baseCurrentDay,
             history: safeArray(loadedData.history, localState?.history).filter(h => h.date !== currentLogicalDate),
             savedSchedules: safeArray(loadedData.savedSchedules, localState?.savedSchedules),

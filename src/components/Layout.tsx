@@ -25,7 +25,8 @@ import {
   Sparkles,
   ArrowRightLeft,
   Lock,
-  Code
+  Code,
+  Bot
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -42,6 +43,7 @@ const navItems = [
   { name: 'Habits', path: '/habits', icon: CheckSquare },
   { name: 'Expenses', path: '/expenses', icon: Wallet },
   { name: 'AI Tutor', path: '#ai-tutor', icon: Sparkles, isAction: true },
+  { name: 'AI Agent', path: '/ai-agent', icon: Bot },
   { name: 'Currency', path: '/currency', icon: ArrowRightLeft },
   { name: 'Analytics', path: '/analytics', icon: PieChart },
   { name: 'History', path: '/history', icon: History },
