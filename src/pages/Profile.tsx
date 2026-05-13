@@ -19,6 +19,7 @@ export default function Profile() {
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
+    await forceSync();
     await supabase.auth.signOut();
     localStorage.removeItem('isAdmin');
     localStorage.removeItem('makeYourFutureState');

@@ -36,6 +36,7 @@ interface AppContextType extends AppState {
   clearNotifications: () => void;
   resetState: () => void;
   fetchExchangeRates: () => Promise<void>;
+  forceSync: () => Promise<void>;
   exchangeRatesOffline: boolean;
 }
 
@@ -116,6 +117,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     stateRef.current = state;
   }, [state]);
 
+  const forceSync = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const currentState = stateRef.current;
+      await supabaseService.updateSettings(session.user.id, currentState.userSettings);
+      await supabaseService.updateProfile(session.user.id, currentState.userProfile);
+      
+      const allDays = [...currentState.history, currentState.currentDayData];
+      for (const day of allDays) {
+        if (!day) continue;
+        for (const s of day.schedule) {
+          await supabaseService.createSchedule(session.user.id, day.date, s).catch(()=>{});
+        }
+        for (const h of day.habits) {
+          await supabaseService.createHabit(session.user.id, h).catch(()=>{});
+          if (h.completedToday) {
+            await supabaseService.upsertHabitLog(session.user.id, h.id, day.date, true).catch(()=>{});
+          }
+        }
+        for (const e of day.expenses) {
+          await supabaseService.createExpense(session.user.id, day.date, e).catch(()=>{});
+        }
+        for (const n of day.notes) {
+          await supabaseService.createNote(session.user.id, day.date, n).catch(()=>{});
+        }
+      }
+    } catch(e) {}
+  };
+
   const fetchExchangeRates = async () => {
     try {
       const response = await fetch('https://open.er-api.com/v6/latest/USD');
@@ -177,11 +208,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     let currentUserIdTracker: string | null = null;
     
     const loadState = async () => {
+      // 1. FAST PATH: Load from localStorage immediately to unblock UI
+      let localState: AppState | null = null;
+      try {
+        const saved = localStorage.getItem('makeYourFutureState') || localStorage.getItem('makeYourFutureState_backup');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (!parsed.userSettings?.theme) parsed.userSettings = { ...parsed.userSettings, theme: 'dark' };
+          if (!parsed.userProfile) parsed.userProfile = defaultProfile;
+          if (!parsed.savedSchedules) parsed.savedSchedules = [];
+          if (!parsed.notifications) parsed.notifications = [];
+          if (!parsed.currentDayData) parsed.currentDayData = defaultDailyData;
+          if (!parsed.history) parsed.history = [];
+          
+          localState = parsed;
+          setState(prev => ({ ...parsed, exchangeRatesCache: prev.exchangeRatesCache || parsed.exchangeRatesCache }));
+        } else {
+          setState(prev => ({ ...defaultState, exchangeRatesCache: prev.exchangeRatesCache }));
+        }
+      } catch (e) {
+        console.error('Failed parsing initial local state', e);
+      } finally {
+        setIsStateLoaded(true); // UNBLOCK UI IMMEDIATELY
+      }
+
+      // 2. SLOW PATH: Sync with Supabase in the background
       try {
         // Check Supabase session with a timeout to prevent hanging
         const sessionPromise = supabase.auth.getSession();
         const timeoutPromise = new Promise<{data: {session: any}}>((_, reject) => 
-          setTimeout(() => reject(new Error('Supabase getSession timeout')), 3000)
+          setTimeout(() => reject(new Error('Supabase getSession timeout')), 1000)
         );
         
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
@@ -191,21 +247,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         
         if (!session) {
-          const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
-          // Fallback to local storage for guests
-          const saved = localStorage.getItem('makeYourFutureState');
-          if (isGuestMode && saved) {
-            const parsed = JSON.parse(saved);
-            if (!parsed.userSettings?.theme) parsed.userSettings = { ...parsed.userSettings, theme: 'dark' };
-            if (!parsed.userProfile) parsed.userProfile = defaultProfile;
-            if (!parsed.savedSchedules) parsed.savedSchedules = [];
-            if (!parsed.notifications) parsed.notifications = [];
-            if (!parsed.currentDayData) parsed.currentDayData = defaultDailyData;
-            if (!parsed.history) parsed.history = [];
-            setState(prev => ({ ...parsed, exchangeRatesCache: prev.exchangeRatesCache || parsed.exchangeRatesCache }));
-          } else {
-            setState(prev => ({ ...defaultState, exchangeRatesCache: prev.exchangeRatesCache }));
-          }
+          // If we already loaded guest mode data, we're good
           return;
         }
 
@@ -223,7 +265,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           
           let localState: AppState | null = null;
           // Always try to load local state as a fallback
-          const saved = localStorage.getItem('makeYourFutureState');
+          const saved = localStorage.getItem('makeYourFutureState') || localStorage.getItem('makeYourFutureState_backup');
           if (saved) {
             try { localState = JSON.parse(saved); } catch (e) {}
           }
@@ -471,7 +513,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           // Add timeout to prevent hanging if Supabase is blocked
           const checkPromise = supabase.from('schedules').select('id').limit(1);
           const timeoutPromise = new Promise<any>((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 3000)
+            setTimeout(() => reject(new Error('Timeout')), 1000)
           );
           const { error: checkError } = await Promise.race([checkPromise, timeoutPromise]);
           const tablesExist = !checkError || (!checkError.message?.includes('does not exist') && !checkError.message?.includes('schema cache'));
@@ -494,17 +536,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         try {
           const isGuestMode = localStorage.getItem('isGuestMode') === 'true';
-          if (isGuestMode) {
-            const saved = localStorage.getItem('makeYourFutureState');
-            if (saved) setState(prev => ({ ...JSON.parse(saved), exchangeRatesCache: prev.exchangeRatesCache }));
-          } else {
-            setSyncError(err.message || 'Failed to sync with cloud. Try refreshing.');
+          const saved = localStorage.getItem('makeYourFutureState');
+          if (saved) {
+             setState(prev => ({ ...JSON.parse(saved), exchangeRatesCache: prev.exchangeRatesCache }));
+          }
+          if (!isGuestMode) {
+            setSyncError(err.message || 'Failed to sync with cloud. Offline mode.');
           }
         } catch (e) {
           console.error('Failed to parse local storage state', e);
         }
       } finally {
-        setIsStateLoaded(true);
+        // Already set to true in FAST PATH
       }
     };
 
@@ -517,6 +560,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       } else if (event === 'SIGNED_OUT') {
         currentUserIdTracker = null;
+        const backup = localStorage.getItem('makeYourFutureState');
+        if (backup) {
+          localStorage.setItem('makeYourFutureState_backup', backup);
+        }
         localStorage.removeItem('makeYourFutureState');
         setState(defaultState);
       }
@@ -1319,6 +1366,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       clearNotifications,
       resetState,
       fetchExchangeRates,
+      forceSync,
       exchangeRatesOffline
     }}>
       {children}

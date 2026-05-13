@@ -57,12 +57,17 @@ const navItems = [
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { userSettings, updateSettings, userProfile, updateProfile, currentDayData, syncError, isStateLoaded, resetState } = useAppContext();
+  const { userSettings, updateSettings, userProfile, updateProfile, currentDayData, syncError, isStateLoaded, resetState, forceSync } = useAppContext();
   const [time, setTime] = useState(new Date());
   
   const handleSignOut = async () => {
+    await forceSync();
     try { await supabase.auth.signOut(); } catch (e) {}
     localStorage.removeItem('isAdmin');
+    const backup = localStorage.getItem('makeYourFutureState');
+    if (backup) {
+      localStorage.setItem('makeYourFutureState_backup', backup);
+    }
     localStorage.removeItem('makeYourFutureState');
     localStorage.removeItem('isGuestMode');
     localStorage.removeItem('zenvex_guest_creds');

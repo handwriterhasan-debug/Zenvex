@@ -5,7 +5,7 @@ export const supabaseService = {
   async loadUserData(userId: string) {
     const safeFetch = async (query: any) => {
       try {
-        const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 10000));
+        const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 3000));
         return await Promise.race([query, timeoutPromise]);
       } catch (e: any) {
         if (e.message !== 'Query timeout') {
@@ -15,12 +15,9 @@ export const supabaseService = {
       }
     };
 
-    let profileReq = await safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle());
-    let settingsReq = await safeFetch(supabase.from('user_settings').select('*').eq('id', userId).maybeSingle());
-
     const fetches = await Promise.all([
-      Promise.resolve(profileReq),
-      Promise.resolve(settingsReq),
+      safeFetch(supabase.from('user_profiles').select('*').eq('id', userId).maybeSingle()),
+      safeFetch(supabase.from('user_settings').select('*').eq('id', userId).maybeSingle()),
       safeFetch(supabase.from('schedules').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habits').select('*').eq('user_id', userId)),
       safeFetch(supabase.from('habit_logs').select('*').eq('user_id', userId)),

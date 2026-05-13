@@ -130,10 +130,23 @@ export default function Analytics() {
 
   // Calculate monthly improvement
   const monthlyScores: Record<string, { total: number, count: number }> = {};
+  
+  // Calculate expenses by month and category
+  const expenseMonthlyDataRaw: Record<string, Record<string, number>> = {};
+  const expenseCategories = new Set<string>();
+
+  // Fill in the last 12 months with empty data so the chart looks continuous
+  for (let i = 11; i >= 0; i--) {
+    const d = subMonths(now, i);
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    expenseMonthlyDataRaw[monthKey] = {};
+  }
+
   allData.forEach(day => {
     const dateObj = new Date(day.date);
     const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
     
+    // For productivity score
     const totalTasks = (day.schedule || []).length;
     const completedTasks = (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length;
     const totalHabits = (day.habits || []).length;
@@ -148,7 +161,32 @@ export default function Analytics() {
     }
     monthlyScores[monthKey].total += score;
     monthlyScores[monthKey].count += 1;
+
+    // For expenses (only process last 12 months)
+    if (isAfter(dateObj, subMonths(now, 13))) { // allow a bit over 12 months
+      if (!expenseMonthlyDataRaw[monthKey]) expenseMonthlyDataRaw[monthKey] = {};
+      (day.expenses || []).forEach(e => {
+        if (e.type === 'expense') {
+          const cat = e.category || 'Other';
+          expenseCategories.add(cat);
+          expenseMonthlyDataRaw[monthKey][cat] = (expenseMonthlyDataRaw[monthKey][cat] || 0) + e.amount;
+        }
+      });
+    }
   });
+
+  const expenseMonthlyData = Object.entries(expenseMonthlyDataRaw)
+    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+    .map(([key, cats]) => {
+      const [year, month] = key.split('-');
+      const dateObj = new Date(Number(year), Number(month) - 1);
+      return {
+        month: dateObj.toLocaleDateString('en-US', { month: 'short' }),
+        ...cats
+      };
+    });
+
+  const EXPENSE_COLORS = ['#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f43f5e', '#a855f7', '#14b8a6', '#f97316'];
 
   const monthlyImprovementData = Object.entries(monthlyScores)
     .sort(([keyA], [keyB]) => (keyA || '').localeCompare(keyB || ''))
@@ -475,6 +513,37 @@ export default function Analytics() {
                 />
                 <Area type="monotone" dataKey="score" stroke="#84cc16" strokeWidth={2} fillOpacity={1} fill="url(#colorScoreMonth)" />
               </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Expense Monthly Trend Chart */}
+        <div className="bg-surface border border-border-dim rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:border-accent-primary-border transition-all duration-500 lg:col-span-2">
+          <div className="absolute top-0 right-1/2 w-64 h-64 bg-pink-500/20 rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-700 pointer-events-none"></div>
+          
+          <div className="flex items-center justify-between mb-8 relative z-10">
+            <h2 className="text-lg font-bold font-display tracking-tight text-text-main">
+              Expense Trends (12 Months)
+            </h2>
+            <div className="p-2 rounded-lg bg-pink-500/10 text-pink-400 border border-pink-500/20 shadow-inner">
+              <Activity className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="h-80 relative z-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={expenseMonthlyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" vertical={false} />
+                <XAxis dataKey="month" stroke="#666" tick={{fill: '#666', fontSize: 12}} axisLine={false} tickLine={false} dy={10} />
+                <YAxis stroke="#666" tick={{fill: '#666', fontSize: 12}} axisLine={false} tickLine={false} dx={-10} />
+                <Tooltip 
+                  contentStyle={{backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', color: '#fff', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.5)'}}
+                  itemStyle={{color: '#fff', fontWeight: 'bold'}}
+                  cursor={{fill: '#ffffff0a'}}
+                />
+                {Array.from(expenseCategories).map((cat, i) => (
+                  <Bar key={cat} dataKey={cat} stackId="a" fill={EXPENSE_COLORS[i % EXPENSE_COLORS.length]} />
+                ))}
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>

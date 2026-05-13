@@ -12,7 +12,7 @@ export default function ProtectedRoute() {
         // Check Supabase session with a timeout to prevent hanging
         const sessionPromise = supabase.auth.getSession();
         const timeoutPromise = new Promise<{data: {session: any}}>((_, reject) => 
-          setTimeout(() => reject(new Error('Supabase getSession timeout')), 3000)
+          setTimeout(() => reject(new Error('Supabase getSession timeout')), 1000)
         );
         
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);

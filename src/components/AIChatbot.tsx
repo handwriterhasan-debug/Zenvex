@@ -48,7 +48,7 @@ export function AIChatbot() {
     try {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is missing. Please add it to your environment variables.");
+        throw new Error("GEMINI_API_KEY is missing. Please add VITE_GEMINI_API_KEY to your Vercel environment variables.");
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -468,7 +468,7 @@ Assistant:`;
       console.error("Chatbot error:", error);
       const errorMessage = error.message === "Timeout" 
         ? "Something went wrong, please try again" 
-        : "Sorry, I encountered an error connecting to the AI service. Please make sure the API key is configured correctly.";
+        : `Error: ${error.message || 'Unknown error occurred'}`;
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'model', 
