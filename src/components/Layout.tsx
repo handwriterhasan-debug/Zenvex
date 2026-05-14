@@ -26,7 +26,8 @@ import {
   ArrowRightLeft,
   Lock,
   Code,
-  Bot
+  Bot,
+  ListTodo
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -40,6 +41,7 @@ import { ComplainBox } from './ComplainBox';
 const navItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Schedule', path: '/schedule', icon: Calendar },
+  { name: 'Tasks', path: '/todos', icon: ListTodo },
   { name: 'Habits', path: '/habits', icon: CheckSquare },
   { name: 'Expenses', path: '/expenses', icon: Wallet },
   { name: 'AI Tutor', path: '#ai-tutor', icon: Sparkles, isAction: true },
@@ -549,8 +551,8 @@ export default function Layout() {
         </div>
         
         {/* Mobile Bottom Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-2xl border-t border-border-dim pb-safe h-[72px] flex items-center justify-center px-1">
-          <div className="flex items-start justify-between w-full max-w-full h-full pt-2">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-2xl border-t border-border-dim safe-pb flex items-center justify-center px-1">
+          <div className="flex items-start justify-between w-full max-w-full pt-1.5 pb-1 h-[56px]">
             {navItems.slice(0, 6).map((item) => (
               <NavLink
                 key={item.name}
@@ -572,7 +574,7 @@ export default function Layout() {
               >
                 {({ isActive }) => (
                   <>
-                    <div className="relative flex items-center justify-center w-8 h-8 rounded-full mb-1">
+                    <div className="relative flex items-center justify-center w-7 h-7 rounded-full mb-0.5">
                       {isActive && (
                         <motion.div 
                           layoutId="bottom-nav-active-pill"
@@ -580,9 +582,9 @@ export default function Layout() {
                           transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                         />
                       )}
-                      <item.icon className={cn("w-[22px] h-[22px] z-10 transition-transform duration-300 shrink-0", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(var(--accent-primary),0.5)]" : "")} />
+                      <item.icon className={cn("w-5 h-5 z-10 transition-transform duration-300 shrink-0", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(var(--accent-primary),0.5)]" : "")} />
                     </div>
-                    <span className={cn("z-10 tracking-wide transition-all duration-300 truncate w-full text-center px-0.5", isActive ? "font-bold text-accent-primary opacity-100" : "font-medium opacity-80")} style={{ fontSize: '9px' }}>{item.name}</span>
+                    <span className={cn("z-10 tracking-wide transition-all duration-300 truncate w-full text-center px-0.5", isActive ? "font-bold text-accent-primary opacity-100" : "font-medium opacity-80")} style={{ fontSize: '9px', lineHeight: '1.2' }}>{item.name}</span>
                   </>
                 )}
               </NavLink>

@@ -11,6 +11,7 @@ import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
 import Schedule from './pages/Schedule';
+import Todos from './pages/Todos';
 import Habits from './pages/Habits';
 import Expenses from './pages/Expenses';
 import Analytics from './pages/Analytics';
@@ -41,6 +42,7 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/schedule" element={<Schedule />} />
+              <Route path="/todos" element={<Todos />} />
               <Route path="/habits" element={<Habits />} />
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/analytics" element={<Analytics />} />

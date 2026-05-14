@@ -47,12 +47,20 @@ export interface NoteItem {
   isExcuse?: boolean;
 }
 
+export interface TodoItem {
+  id: string;
+  task: string;
+  completed: boolean;
+  timestamp: string;
+}
+
 export interface DailyData {
   date: string; // The logical date this data belongs to (YYYY-MM-DD)
   schedule: ScheduleItem[];
   habits: HabitItem[];
   expenses: ExpenseItem[];
   notes: NoteItem[];
+  todos: TodoItem[];
 }
 
 export interface UserProfile {

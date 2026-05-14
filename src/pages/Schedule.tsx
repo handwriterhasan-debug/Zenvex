@@ -7,6 +7,7 @@ import { formatTime12Hour } from '../utils/timeUtils';
 import { LiveCalendar } from '../components/LiveCalendar';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import confetti from 'canvas-confetti';
 
 export default function Schedule() {
   const { currentDayData, addSchedule, updateSchedule, reorderSchedule, saveScheduleTemplate, clearSchedule, deleteScheduleTask } = useAppContext();
@@ -162,6 +163,16 @@ export default function Schedule() {
         actualHours,
         excuse: completionModal.excuse
       });
+      if (actualHours >= plannedHours) {
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#39ff14', '#ffffff', '#0a0a0a'],
+          disableForReducedMotion: true
+        });
+      }
+      showToast(actualHours < plannedHours ? 'Task marked as incomplete.' : 'Task marked as completed!');
       setCompletionModal({ isOpen: false, taskId: null, actualHours: '', excuse: '' });
     }
   };
@@ -392,7 +403,7 @@ export default function Schedule() {
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         style={provided.draggableProps.style}
-                        className={`group relative flex flex-col md:flex-row md:items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl bg-surface border hover:border-accent-primary-border hover:bg-accent-primary-dim transition-colors shadow-sm ${snapshot.isDragging ? 'border-accent-primary shadow-lg z-50' : 'border-border-dim'}`}
+                        className={`group relative flex flex-col md:flex-row md:items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl bg-surface border transition-all duration-500 shadow-sm ${snapshot.isDragging ? 'border-accent-primary shadow-lg z-50' : item.status === 'completed' ? 'border-emerald-500/30 bg-emerald-500/5 opacity-80 hover:bg-emerald-500/10' : item.status === 'incomplete' ? 'border-red-500/30 bg-red-500/5 opacity-80 hover:bg-red-500/10' : item.status === 'in-progress' ? 'border-accent-primary-border bg-accent-primary-dim shadow-[0_0_15px_rgba(var(--accent-primary-rgb),0.1)]' : 'border-border-dim hover:border-accent-primary-border hover:bg-accent-primary-dim'}`}
                       >
                         <div 
                           {...provided.dragHandleProps}
@@ -409,7 +420,7 @@ export default function Schedule() {
                         <div className="flex-1 flex items-center gap-2 md:gap-3">
                           <div className={`w-1 h-6 md:h-8 rounded-full ${categories.find(c => c.name === item.category)?.color || 'bg-gray-500'}`}></div>
                           <div className="min-w-0">
-                            <h3 className="font-medium text-base md:text-lg truncate text-text-main">{item.task}</h3>
+                            <h3 className={`font-medium text-base md:text-lg truncate transition-all ${item.status === 'completed' ? 'text-text-muted line-through' : 'text-text-main'}`}>{item.task}</h3>
                             <div className="flex flex-wrap items-center gap-1.5 md:gap-3 text-[10px] md:text-xs text-text-muted mt-0.5 md:mt-1">
                               <span className="bg-surface-light px-1.5 py-0.5 rounded-md">{item.category}</span>
                               {item.status === 'completed' && item.actualHours != null && (

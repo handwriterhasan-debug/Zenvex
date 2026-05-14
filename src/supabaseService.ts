@@ -120,9 +120,17 @@ export const supabaseService = {
     ].filter(Boolean));
 
     const history: DailyData[] = Array.from(allDates).map(date => {
+      const parsedDaySchedules = parsedSchedules.filter(s => s.date === date && s.category !== '_todo_');
+      const parsedDayTodos = parsedSchedules.filter(s => s.date === date && s.category === '_todo_').map(s => ({
+        id: s.id,
+        task: s.task,
+        completed: s.status === 'completed',
+        timestamp: s.date
+      }));
+      
       return {
         date,
-        schedule: parsedSchedules.filter(s => s.date === date).map(s => ({
+        schedule: parsedDaySchedules.map(s => ({
           id: s.id,
           timeStart: s.timeStart,
           timeEnd: s.timeEnd,
@@ -132,6 +140,7 @@ export const supabaseService = {
           actualHours: s.actualHours,
           excuse: s.excuse
         })).sort((a, b) => a.timeStart.localeCompare(b.timeStart)),
+        todos: parsedDayTodos,
         habits: parsedHabits.map(h => {
           return {
             id: h.id,

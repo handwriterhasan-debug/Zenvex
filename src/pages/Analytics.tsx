@@ -55,10 +55,14 @@ export default function Analytics() {
   let productivityData = filteredData.map(day => {
     const totalTasks = (day.schedule || []).length;
     const completedTasks = (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length;
+    const totalTodos = (day.todos || []).length;
+    const completedTodos = (day.todos || []).filter(t => t.completed).length;
+
     const missedTasks = totalTasks - completedTasks;
+    const missedTodos = totalTodos - completedTodos;
     
-    cumulativeScore += completedTasks;
-    cumulativeScore -= missedTasks;
+    cumulativeScore += (completedTasks + completedTodos);
+    cumulativeScore -= (missedTasks + missedTodos);
     if (cumulativeScore < 0) cumulativeScore = 0;
     
     const dateObj = new Date(day.date);
@@ -151,10 +155,16 @@ export default function Analytics() {
     const completedTasks = (day.schedule || []).filter(s => s.status === 'completed' || s.status === 'incomplete').length;
     const totalHabits = (day.habits || []).length;
     const completedHabits = (day.habits || []).filter(h => h.completedToday).length;
+    const totalTodos = (day.todos || []).length;
+    const completedTodos = (day.todos || []).filter(t => t.completed).length;
     
-    const taskScore = totalTasks > 0 ? (completedTasks / totalTasks) * 50 : 0;
-    const habitScore = totalHabits > 0 ? (completedHabits / totalHabits) * 50 : 0;
-    const score = taskScore + habitScore;
+    const taskScore = totalTasks > 0 ? (completedTasks / totalTasks) * 33 : 0;
+    const habitScore = totalHabits > 0 ? (completedHabits / totalHabits) * 33 : 0;
+    const todoScore = totalTodos > 0 ? (completedTodos / totalTodos) * 34 : 0;
+    
+    // adjust if some are 0
+    let totalCategories = (totalTasks > 0 ? 1 : 0) + (totalHabits > 0 ? 1 : 0) + (totalTodos > 0 ? 1 : 0);
+    const score = totalCategories > 0 ? ((taskScore + habitScore + todoScore) * (3 / totalCategories)) : 0;
 
     if (!monthlyScores[monthKey]) {
       monthlyScores[monthKey] = { total: 0, count: 0 };
@@ -252,6 +262,11 @@ export default function Analytics() {
     (day.habits || []).forEach(h => {
       if (h.completedToday) {
         categoryBalance[h.category] = (categoryBalance[h.category] || 0) + 1;
+      }
+    });
+    (day.todos || []).forEach(t => {
+      if (t.completed) {
+        categoryBalance['To Do'] = (categoryBalance['To Do'] || 0) + 1;
       }
     });
   });

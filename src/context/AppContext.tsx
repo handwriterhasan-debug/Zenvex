@@ -28,6 +28,9 @@ interface AppContextType extends AppState {
   deleteNote: (id: string) => void;
   deleteHabit: (id: string) => void;
   deleteScheduleTask: (id: string) => void;
+  addTodo: (item: TodoItem) => void;
+  updateTodo: (id: string, updates: Partial<TodoItem>) => void;
+  deleteTodo: (id: string) => void;
   enableDemoMode: () => void;
   disableDemoMode: () => void;
   checkAndResetDay: () => void;
@@ -92,6 +95,7 @@ const defaultDailyData: DailyData = {
   habits: [],
   expenses: [],
   notes: [],
+  todos: [],
 };
 
 const defaultState: AppState = {
@@ -130,6 +134,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!day) continue;
         for (const s of day.schedule) {
           await supabaseService.createSchedule(session.user.id, day.date, s).catch(()=>{});
+        }
+        for (const t of day.todos || []) {
+          await supabaseService.createSchedule(session.user.id, day.date, {
+            id: t.id,
+            timeStart: '',
+            timeEnd: '',
+            task: t.task,
+            category: '_todo_',
+            status: t.completed ? 'completed' : 'pending'
+          }).catch(()=>{});
         }
         for (const h of day.habits) {
           await supabaseService.createHabit(session.user.id, h).catch(()=>{});
@@ -316,7 +330,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 return { ...h, completedToday: h.completedToday !== undefined ? h.completedToday : false, streak: h.streak || 0 };
               }),
               expenses: [],
-              notes: []
+              notes: [],
+              todos: localState?.currentDayData?.todos || [],
             };
           } else if (localState?.currentDayData?.date === currentLogicalDate) {
             // merge
@@ -326,6 +341,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                habits: safeArray(baseCurrentDay.habits, localState.currentDayData.habits),
                expenses: safeArray(baseCurrentDay.expenses, localState.currentDayData.expenses),
                notes: safeArray(baseCurrentDay.notes, localState.currentDayData.notes),
+               todos: safeArray(baseCurrentDay.todos, localState.currentDayData.todos),
             };
           }
 
@@ -648,6 +664,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             habits: newHabits,
             expenses: [],
             notes: [],
+            todos: [],
           };
         }
 
@@ -1078,7 +1095,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           schedule: [],
           habits: prev.currentDayData.habits.map(h => ({ ...h, completedToday: false, streak: 0 })),
           expenses: [],
-          notes: []
+          notes: [],
+          todos: []
         };
         allDays.push(missingDay);
         allDays.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -1275,6 +1293,63 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await supabaseService.deleteSchedule(id);
   };
 
+  const addTodo = async (item: TodoItem) => {
+    let dateStr = '';
+    setState(prev => {
+      dateStr = prev.currentDayData.date;
+      return {
+        ...prev,
+        currentDayData: { ...prev.currentDayData, todos: [...(prev.currentDayData.todos || []), item] }
+      };
+    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await supabaseService.createSchedule(session.user.id, dateStr, {
+        id: item.id,
+        timeStart: '',
+        timeEnd: '',
+        task: item.task,
+        category: '_todo_',
+        status: item.completed ? 'completed' : 'pending'
+      }).catch(e => setSyncError("Failed to save todo: " + e.message));
+    }
+  };
+
+  const updateTodo = async (id: string, updates: Partial<TodoItem>) => {
+    let currentTask = '';
+    let currentCompleted = false;
+    setState(prev => {
+      const existing = (prev.currentDayData.todos || []).find(t => t.id === id);
+      if (existing) {
+        currentTask = updates.task ?? existing.task;
+        currentCompleted = updates.completed ?? existing.completed;
+      }
+      return {
+        ...prev,
+        currentDayData: {
+          ...prev.currentDayData,
+          todos: (prev.currentDayData.todos || []).map(t => t.id === id ? { ...t, ...updates } : t)
+        }
+      }
+    });
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && currentTask) {
+      await supabaseService.updateSchedule(id, {
+        task: currentTask,
+        status: currentCompleted ? 'completed' : 'pending'
+      }).catch(e => setSyncError("Failed to update todo: " + e.message));
+    }
+  };
+
+  const deleteTodo = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      currentDayData: { ...prev.currentDayData, todos: (prev.currentDayData.todos || []).filter(t => t.id !== id) }
+    }));
+    await supabaseService.deleteSchedule(id).catch(e => setSyncError("Failed to delete todo: " + e.message));
+  };
+
   const enableDemoMode = () => {
     const demoDate = getLogicalDate(state.userSettings.dayEndTime);
     setState(prev => ({
@@ -1304,6 +1379,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         notes: [
           { id: '1', title: 'Why editing took longer today', content: 'I got distracted by trying to find the perfect B-roll. Next time, I need to...', tags: ['Reflection', 'Editing'], timestamp: new Date().toISOString() },
           { id: '2', title: 'What went well today', content: 'Woke up at 4 AM and completed the hardest coding task before 8 AM. The...', tags: ['Win', 'Deep Work'], timestamp: new Date(Date.now() - 86400000).toISOString() },
+        ],
+        todos: [
+          { id: '1', task: 'Gym', completed: true, timestamp: new Date().toISOString() },
+          { id: '2', task: 'Party', completed: false, timestamp: new Date().toISOString() },
         ]
       },
       // Add some fake history for analytics
@@ -1321,7 +1400,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           expenses: [
             { id: '1', title: 'Food', amount: 500, type: 'expense', category: 'Food', timestamp: d.toISOString() }
           ],
-          notes: []
+          notes: [],
+          todos: []
         };
       })
     }));
@@ -1358,6 +1438,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deleteNote,
       deleteHabit,
       deleteScheduleTask,
+      addTodo,
+      updateTodo,
+      deleteTodo,
       enableDemoMode,
       disableDemoMode,
       checkAndResetDay,

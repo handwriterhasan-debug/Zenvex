@@ -13,7 +13,7 @@ interface Message {
 }
 
 export function AIChatbot() {
-  const { addSchedule, updateSettings, clearSchedule, undoSchedule, addHabit, addExpense, addNote, applySubscription, userProfile, updateProfile, addNotification, currentDayData, history, userSettings } = useAppContext();
+  const { addSchedule, updateSettings, clearSchedule, undoSchedule, addHabit, addExpense, addNote, applySubscription, userProfile, updateProfile, addNotification, currentDayData, history, userSettings, addTodo } = useAppContext();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -169,6 +169,22 @@ export function AIChatbot() {
           required: ["title", "content"]
         }
       };
+      
+      const addTodoFunction: FunctionDeclaration = {
+        name: "addTodo",
+        description: "Adds a simple task to the user's todo list. Use this specifically when the user asks to add something to their todo list or just a simple task without time restrictions.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            tasks: {
+              type: Type.ARRAY,
+              description: "List of tasks to add to the todo list.",
+              items: { type: Type.STRING }
+            }
+          },
+          required: ["tasks"]
+        }
+      };
 
       const applyCouponFunction: FunctionDeclaration = {
         name: "applyCoupon",
@@ -213,6 +229,8 @@ export function AIChatbot() {
 
 Key Guidelines:
 - Always greet the user by their name if it's the start of a conversation or if they introduce themselves.
+- If the user asks to add an activity (like gym or practice) without specifying the section (e.g. Schedule, Habit, or Tasks), ask them which section they would like to add it to before calling any tools.
+- If the user asks to add something to their "todo list", "tasks", or just a simple task, use the addTodo tool. Do NOT use createSchedule unless they explicitly mention schedule or provide times or ask to plan their day with times.
 - If the user asks to create a schedule but doesn't provide times, ask them for the times before creating it. 
 - If the user provides a full schedule and asks to fix or replace their current one, use the replaceSchedule tool.
 - If the user wants to apply a coupon, use the applyCoupon tool.
@@ -246,6 +264,7 @@ Assistant:`;
               addHabitFunction,
               addExpenseFunction,
               addNoteFunction,
+              addTodoFunction,
               applyCouponFunction,
               updateProfileFunction,
               navigateFunction
@@ -398,6 +417,24 @@ Assistant:`;
                 message: `Created new note: ${args.title}`,
                 type: 'success'
               });
+            } else if (call.name === 'addTodo') {
+              const args = call.args as any;
+              if (args.tasks && Array.isArray(args.tasks)) {
+                args.tasks.forEach((taskName: string) => {
+                  addTodo({
+                    id: crypto.randomUUID(),
+                    task: taskName,
+                    completed: false,
+                    timestamp: new Date().toISOString()
+                  });
+                });
+                responseText += `\n\nI've added those ${args.tasks.length} tasks to your todo list!`;
+                addNotification({
+                  title: 'Todos Added',
+                  message: `Added ${args.tasks.length} new tasks to your todo list.`,
+                  type: 'success'
+                });
+              }
             } else if (call.name === 'applyCoupon') {
               const args = call.args as any;
               const code = (args.code || '').toLowerCase();
@@ -516,7 +553,7 @@ Assistant:`;
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="fixed bottom-0 left-0 right-0 w-full max-h-[70vh] bg-[#111] border-t border-[#333] rounded-t-3xl md:bottom-24 md:right-6 md:left-auto md:w-[400px] md:max-h-[600px] md:border md:rounded-2xl shadow-2xl flex flex-col z-[999] overflow-hidden"
+              className="fixed bottom-0 left-0 right-0 w-full h-[85vh] md:max-h-[600px] md:h-auto bg-[#111] border-t border-[#333] rounded-t-3xl md:bottom-24 md:right-6 md:left-auto md:w-[400px] md:border md:rounded-2xl shadow-2xl flex flex-col z-[999] overflow-hidden"
             >
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-4 border-b border-[#222] bg-[#0a0a0a]">
@@ -541,8 +578,8 @@ Assistant:`;
 
               {/* Messages */}
               <div 
-                className="flex-1 p-4 space-y-4 bg-[#0a0a0a]/50"
-                style={{ overflowY: 'auto', maxHeight: '400px' }}
+                className="flex-1 p-4 space-y-4 bg-[#0a0a0a]/50 overflow-y-auto"
+                style={{ overflowWrap: 'break-word' }}
               >
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -585,10 +622,10 @@ Assistant:`;
               </div>
 
               {/* Input */}
-              <div className="p-4 border-t border-[#222] bg-[#0a0a0a] pb-safe">
+              <div className="p-4 border-t border-[#222] bg-[#0a0a0a] safe-pb">
                 <form 
                   onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-                  className="flex items-center gap-3 w-full"
+                  className="flex items-end gap-3 w-full"
                 >
                   <textarea
                     value={input}
@@ -609,12 +646,12 @@ Assistant:`;
                     placeholder="Ask your tutor..."
                     maxLength={1000}
                     rows={1}
-                    className="flex-1 bg-[#111] border border-[#333] rounded-full px-5 py-3 text-[14px] text-white focus:outline-none focus:border-accent-primary transition-colors resize-none min-h-[44px] max-h-[120px] overflow-y-auto"
+                    className="flex-1 bg-surface border border-border-dim rounded-2xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary/20 transition-all resize-none min-h-[46px] max-h-[120px] overflow-y-auto w-full leading-relaxed"
                   />
                   <button 
                     type="submit"
                     disabled={!input.trim() || isLoading}
-                    className="w-11 h-11 rounded-full bg-accent-primary hover:bg-accent-primary-hover disabled:opacity-50 disabled:hover:bg-accent-primary text-[#1A1A1A] flex items-center justify-center transition-colors shrink-0"
+                    className="w-11 h-11 rounded-xl bg-accent-primary hover:bg-accent-primary-hover disabled:opacity-50 disabled:hover:bg-accent-primary text-[#1A1A1A] flex items-center justify-center transition-all shrink-0 mb-[1px]"
                   >
                     <Send className="w-5 h-5 ml-0.5" />
                   </button>

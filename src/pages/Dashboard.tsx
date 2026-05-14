@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Target, CheckCircle, Clock, Activity, DollarSign, Info, Plus, PieChart as PieChartIcon, Sparkles, BrainCircuit, Calendar, TrendingUp, Play, Pause, BookOpen } from 'lucide-react';
+import { Target, CheckCircle, Clock, Activity, DollarSign, Info, Plus, PieChart as PieChartIcon, Sparkles, BrainCircuit, Calendar, TrendingUp, Play, Pause, BookOpen, ListTodo } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Link, useOutletContext } from 'react-router';
 import { formatTime12Hour } from '../utils/timeUtils';
@@ -63,12 +63,14 @@ export default function Dashboard() {
   // Calculate totals based on filtered data
   let absoluteTotalTasks = 0;
   let absoluteTotalHabits = 0;
+  let absoluteTotalTodos = 0;
   let absoluteTotalExpenses = 0;
   let absoluteTotalNotes = 0;
 
   filteredData.forEach(day => {
     absoluteTotalTasks += (day.schedule || []).length;
     absoluteTotalHabits += (day.habits || []).length;
+    absoluteTotalTodos += (day.todos || []).length;
     absoluteTotalExpenses += (day.expenses || []).filter(e => e.type === 'expense').reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
     absoluteTotalNotes += (day.notes || []).length;
   });
@@ -77,6 +79,8 @@ export default function Dashboard() {
   let totalTasks = 0;
   let completedHabits = 0;
   let totalHabits = 0;
+  let completedTodos = 0;
+  let totalTodos = 0;
   let totalExpenses = 0;
   let totalPlannedHours = 0;
   let totalCompletedHours = 0;
@@ -88,6 +92,8 @@ export default function Dashboard() {
     totalTasks += (day.schedule || []).length;
     completedHabits += (day.habits || []).filter(h => h.completedToday).length;
     totalHabits += (day.habits || []).length;
+    completedTodos += (day.todos || []).filter(t => t.completed).length;
+    totalTodos += (day.todos || []).length;
     
     if ((day.notes || []).some(n => n.isExcuse)) {
       hasValidExcuse = true;
@@ -141,7 +147,7 @@ export default function Dashboard() {
   const disciplineScore = Math.round(taskScore + habitScore);
 
   // Chart Data Generation
-  const generateChartData = (metric: 'discipline' | 'tasks' | 'hours' | 'habits' | 'expenses' | 'notes') => {
+  const generateChartData = (metric: 'discipline' | 'tasks' | 'hours' | 'habits' | 'todos' | 'expenses' | 'notes') => {
     // Always use real data, aggregate by day
     let dataToUse = filteredData;
     if (timeFilter === 'Today') {
@@ -159,6 +165,7 @@ export default function Dashboard() {
       const dTotalTasks = (day.schedule || []).length;
       const dHabits = (day.habits || []).filter(h => h.completedToday).length;
       const dTotalHabits = (day.habits || []).length;
+      const dTodos = (day.todos || []).filter(t => t.completed).length;
       const dNotes = (day.notes || []).length;
       
       let dTaskScore = 0;
@@ -198,7 +205,7 @@ export default function Dashboard() {
       return {
         id: `day-${index}-${day.date}`,
         name: name,
-        value: metric === 'discipline' ? dScore : metric === 'tasks' ? dTasks : metric === 'hours' ? dHours : metric === 'habits' ? dHabits : metric === 'notes' ? dNotes : dExpenses
+        value: metric === 'discipline' ? dScore : metric === 'tasks' ? dTasks : metric === 'hours' ? dHours : metric === 'habits' ? dHabits : metric === 'todos' ? dTodos : metric === 'notes' ? dNotes : dExpenses
       };
     });
 
@@ -422,8 +429,8 @@ export default function Dashboard() {
       </div>
 
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4 mb-8">
-        <MetricCard 
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
+        <MetricCard  
           title="Discipline Score" 
           value={`${disciplineScore}%`} 
           icon={Target} 
@@ -444,7 +451,7 @@ export default function Dashboard() {
           }
         />
         <MetricCard 
-          title="Total Tasks" 
+          title="Scheduled Tasks" 
           value={absoluteTotalTasks} 
           icon={CheckCircle} 
           accentColor="#1f8c0a"
@@ -499,6 +506,26 @@ export default function Dashboard() {
                 </defs>
                 <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#29b314' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                 <Bar dataKey="value" name="Habits" fill="url(#habitsGradient)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          }
+        />
+        <MetricCard 
+          title="Total Tasks" 
+          value={absoluteTotalTodos} 
+          icon={ListTodo} 
+          accentColor="#50ff33"
+          chart={
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={generateChartData('todos')}>
+                <defs>
+                  <linearGradient id="todosGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#50ff33" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#1f8c0a" stopOpacity={1}/>
+                  </linearGradient>
+                </defs>
+                <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#ffffff1a', borderRadius: '12px', fontSize: '12px' }} itemStyle={{ color: '#50ff33' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                <Bar dataKey="value" name="Tasks" fill="url(#todosGradient)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           }
@@ -833,23 +860,23 @@ export default function Dashboard() {
 
 function MetricCard({ title, value, icon: Icon, colorClass, chart, accentColor = '#0a84ff' }: any) {
   return (
-    <div className="relative p-4 md:p-6 rounded-2xl md:rounded-3xl bg-surface border border-border-dim overflow-hidden group hover:border-accent-primary-border transition-all duration-500 shadow-sm">
+    <div className="relative p-4 md:p-6 rounded-2xl md:rounded-3xl bg-surface border border-border-dim overflow-hidden group hover:border-accent-primary-border transition-all duration-500 shadow-sm flex flex-col">
       <div 
         className="absolute top-0 right-0 w-24 h-24 rounded-full blur-[40px] opacity-10 pointer-events-none transition-opacity duration-500 group-hover:opacity-30 transform translate-x-1/2 -translate-y-1/2"
         style={{ backgroundColor: accentColor }}
       ></div>
-      <div className="relative z-10 flex flex-col h-full justify-between">
-        <div className="flex justify-between items-start mb-3 md:mb-4">
-          <div>
-            <h3 className="font-medium text-gray-500 text-[10px] md:text-xs uppercase tracking-widest mb-1">{title}</h3>
-            <div className="text-2xl md:text-3xl font-display font-bold text-white tracking-tight">{value}</div>
+      <div className="relative z-10 flex flex-col flex-1 justify-between">
+        <div className="flex justify-between items-start mb-3 md:mb-4 gap-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-medium text-gray-400 text-[10px] md:text-xs uppercase tracking-wider mb-1 leading-tight break-words">{title}</h3>
+            <div className="text-2xl md:text-3xl font-display font-bold text-white tracking-tight break-words">{value}</div>
           </div>
-          <div className="p-2 md:p-2.5 rounded-xl md:rounded-2xl bg-surface/50 border border-border-dim shadow-inner backdrop-blur-sm relative overflow-hidden group-hover:border-white/10 transition-colors">
+          <div className="shrink-0 flex items-center justify-center aspect-square p-2 md:p-2.5 rounded-xl md:rounded-2xl bg-surface/50 border border-border-dim shadow-inner backdrop-blur-sm relative overflow-hidden group-hover:border-white/10 transition-colors">
             <Icon className="w-4 h-4 md:w-5 md:h-5 relative z-10" style={{ color: accentColor }} />
           </div>
         </div>
         {chart && (
-          <div className="h-12 md:h-16 w-full mt-2 md:mt-4 -mx-1">
+          <div className="h-12 md:h-16 w-full mt-auto -mx-1">
             {chart}
           </div>
         )}
